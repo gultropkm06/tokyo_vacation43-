@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>東京五日行程</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: 頂部日期分頁 → 每天一條垂直時間軸（左時間、中軸線圓點、右內容）→ 備用行程 → 最後一頁備選清單 */
+:root{
+  --paper:#f6f3ec;--ink:#1c2230;--ink-2:#5a6170;--line:#d9d3c6;--card:#fffdf8;
+  --tower:#d9482b;--tower-soft:#f7ddd4;
+  --sea:#2f6f7e;--sea-soft:#d8e9ec;
+  --warn:#b0761a;--warn-soft:#f5e7cc;
+  --ok:#3d7a4a;--ok-soft:#dcebdc;
+  --dead:#8a8f99;--dead-soft:#e9e7e1;
+  --font-display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --font-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#15181f;--ink:#ece7dc;--ink-2:#a3a7b1;--line:#2d323d;--card:#1d212a;
+    --tower:#ff7a5c;--tower-soft:#3a251f;--sea:#6fb9c8;--sea-soft:#1c3238;
+    --warn:#e2a94a;--warn-soft:#35291a;--ok:#7cc48a;--ok-soft:#1f3324;--dead:#7b808a;--dead-soft:#262a32;color-scheme:dark
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#15181f;--ink:#ece7dc;--ink-2:#a3a7b1;--line:#2d323d;--card:#1d212a;
+  --tower:#ff7a5c;--tower-soft:#3a251f;--sea:#6fb9c8;--sea-soft:#1c3238;
+  --warn:#e2a94a;--warn-soft:#35291a;--ok:#7cc48a;--ok-soft:#1f3324;--dead:#7b808a;--dead-soft:#262a32;color-scheme:dark
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:0 72px}
+a{color:var(--tower)}
+:focus-visible{outline:2px solid var(--tower);outline-offset:2px}
+
+.hero{padding-block:30px 14px}
+.hero .eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.hero h1{font-family:var(--font-display);font-weight:800;font-size:clamp(32px,8vw,48px);line-height:1.15;margin:6px 0 6px;text-wrap:balance;letter-spacing:.02em}
+.hero h1 em{font-style:normal;color:var(--tower)}
+.hero p{margin:0;color:var(--ink-2);font-size:14px}
+
+/* 分頁 */
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);margin-inline:-16px;padding-inline:16px;border-bottom:2px solid var(--ink);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs ul{list-style:none;margin:0;padding:0;display:flex;gap:2px;min-width:max-content}
+.tabs button{appearance:none;border:0;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer;padding:10px 12px 8px;border-bottom:3px solid transparent;margin-bottom:-2px;text-align:left;line-height:1.3}
+.tabs button .d{display:block;font-family:var(--font-mono);font-weight:600;font-size:15px;font-variant-numeric:tabular-nums}
+.tabs button .w{display:block;font-size:11px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--tower)}
+.tabs button[aria-selected="true"] .d{color:var(--tower)}
+.panel{display:none;padding-top:22px}
+.panel.on{display:block}
+
+.dayhead{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:baseline;margin-bottom:18px}
+.dayhead .num{font-family:var(--font-mono);font-weight:600;font-size:42px;line-height:1;color:var(--tower);font-variant-numeric:tabular-nums}
+.dayhead .num small{display:block;font-size:12px;color:var(--ink-2);letter-spacing:.1em;margin-top:4px;font-weight:500}
+.dayhead h2{font-family:var(--font-display);font-weight:800;font-size:clamp(21px,5vw,27px);margin:0;line-height:1.3;text-wrap:balance}
+.dayhead .sub{color:var(--ink-2);font-size:14px;margin-top:2px}
+.tag{display:inline-block;font-size:11px;font-family:var(--font-mono);letter-spacing:.08em;padding:1px 7px;border:1px solid currentColor;border-radius:2px;vertical-align:middle;margin-left:6px;color:var(--tower)}
+
+/* 時間軸 */
+.tl{list-style:none;margin:0;padding:0;position:relative}
+.tl::before{content:"";position:absolute;left:76px;top:8px;bottom:8px;width:2px;background:var(--line)}
+.tl li{display:grid;grid-template-columns:60px 32px 1fr;gap:0;padding:0 0 18px;position:relative;min-width:0}
+.tl li:last-child{padding-bottom:0}
+.tl .time{font-family:var(--font-mono);font-weight:600;font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.4;padding-top:3px;text-align:right;padding-right:6px}
+.tl .time small{display:block;font-weight:500;font-size:10px;color:var(--ink-2);letter-spacing:.06em}
+.tl .dot{position:relative}
+.tl .dot::after{content:"";position:absolute;left:11px;top:9px;width:10px;height:10px;border-radius:50%;background:var(--card);border:2px solid var(--ink)}
+.tl li.key .dot::after{background:var(--tower);border-color:var(--tower)}
+.tl li.move .dot::after{width:6px;height:6px;left:13px;top:11px;background:var(--line);border-color:var(--line)}
+.tl li.eat .dot::after{background:var(--ok);border-color:var(--ok)}
+.tl li.opt .dot::after{background:var(--card);border:2px dashed var(--warn)}
+.tl .body{min-width:0;padding-left:4px}
+.tl h3{margin:0;font-size:16px;font-weight:700;line-height:1.45}
+.tl li.move h3{font-size:13px;font-weight:500;color:var(--ink-2)}
+.tl li.opt h3{color:var(--warn)}
+.tl p{margin:3px 0 0;color:var(--ink-2);font-size:13.5px}
+.tl .code{font-family:var(--font-mono);font-size:11px;color:var(--ink-2);letter-spacing:.04em}
+.chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;font-weight:500;margin-left:6px;vertical-align:1px}
+.chip.you{background:var(--ink);color:var(--paper)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.sea{background:var(--sea-soft);color:var(--sea)}
+
+/* 備用行程 */
+.backup{margin-top:30px;border-top:2px dashed var(--line);padding-top:16px}
+.backup h3{font-family:var(--font-display);font-size:18px;margin:0 0 10px}
+.backup h3 small{font-family:var(--font-body);font-size:12px;color:var(--ink-2);font-weight:400;margin-left:8px}
+.bk{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.bk li{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:10px 12px;border-left:3px solid var(--warn);background:var(--warn-soft);font-size:13.5px;align-items:start}
+.bk li .k{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--warn);padding-top:3px;white-space:nowrap}
+.bk li b{color:var(--ink)}
+.bk li .rt{display:block;color:var(--ink-2);font-size:12.5px;margin-top:2px}
+
+/* 備選清單 */
+.lists{display:grid;gap:22px}
+.lst h3{font-family:var(--font-display);font-size:19px;margin:0 0 8px;padding-bottom:6px;border-bottom:2px solid var(--ink)}
+.lst ul{list-style:none;margin:0;padding:0}
+.lst li{display:grid;grid-template-columns:1fr auto;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;align-items:start}
+.lst li b{font-weight:700}
+.lst li .d{display:block;color:var(--ink-2);font-size:12.5px;margin-top:1px}
+.lst li .w{font-family:var(--font-mono);font-size:11px;color:var(--ink-2);text-align:right;white-space:nowrap;padding-top:4px}
+.lst li.out{opacity:.55}
+.lst li.out b{text-decoration:line-through}
+.rules{margin-top:26px;padding:14px 16px;border:2px solid var(--ink);background:var(--card)}
+.rules h3{font-family:var(--font-display);font-size:17px;margin:0 0 6px}
+.rules ul{margin:0;padding-left:1.2em;font-size:13.5px;color:var(--ink-2)}
+.rules li{margin:2px 0}
+.rules li b{color:var(--ink)}
+.src{margin-top:28px;font-size:12px;color:var(--ink-2);line-height:1.8}
+.src a{color:var(--ink-2)}
+@media (max-width:420px){
+  .tl::before{left:64px}
+  .tl li{grid-template-columns:50px 28px 1fr}
+  .tl .dot::after{left:9px}
+  .tl li.move .dot::after{left:11px}
+  .tl .time{font-size:13px}
+}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">TOKYO · 2026.10.09 → 10.13 · 成田進出 · 住新宿 · 全程電車</div>
+    <h1>東京<em>五日</em>行程</h1>
+    <p>每天一個分頁。實心紅點是當天的重點，綠點是吃飯，虛線點是可選。主行程下面接備用行程。</p>
+  </header>
+
+  <nav class="tabs" aria-label="日期">
+    <ul role="tablist">
+      <li><button role="tab" id="t09" aria-controls="d09" aria-selected="true"><span class="d">10/09</span><span class="w">四 · 抵達 · 鐵塔</span></button></li>
+      <li><button role="tab" id="t10" aria-controls="d10" aria-selected="false"><span class="d">10/10</span><span class="w">六 · 發售日 · Bar</span></button></li>
+      <li><button role="tab" id="t11" aria-controls="d11" aria-selected="false"><span class="d">10/11</span><span class="w">日 · Bar · 夜來祭</span></button></li>
+      <li><button role="tab" id="t12" aria-controls="d12" aria-selected="false"><span class="d">10/12</span><span class="w">一祝 · 鎌倉 · 秋葉原</span></button></li>
+      <li><button role="tab" id="t13" aria-controls="d13" aria-selected="false"><span class="d">10/13</span><span class="w">二 · 上野 · 回程</span></button></li>
+      <li><button role="tab" id="talt" aria-controls="alt" aria-selected="false"><span class="d">備選</span><span class="w">食物 · 活動 · 景點</span></button></li>
+    </ul>
+  </nav>
+
+  <!-- ========== 10/09 ========== -->
+  <section class="panel on" id="d09" role="tabpanel" aria-labelledby="t09">
+    <div class="dayhead">
+      <div class="num">09<small>THU</small></div>
+      <div><h2>成田落地 → 澀谷快閃 → 銀座 → 東京鐵塔</h2><div class="sub">四件事串成一條線，緩衝只有 5 到 10 分鐘，順序不能換。</div></div>
+    </div>
+    <ol class="tl">
+      <li class="key"><div class="time">15:20<small>ARR</small></div><div class="dot"></div><div class="body"><h3>成田機場落地</h3><p>入境、領行李約 1 小時。先買 N'EX 車票，順便買或儲值 Suica。</p></div></li>
+      <li class="move"><div class="time">16:45</div><div class="dot"></div><div class="body"><h3>N'EX 成田特快直達新宿，約 80 分</h3></div></li>
+      <li><div class="time">18:05</div><div class="dot"></div><div class="body"><h3>新宿飯店 Check-in</h3><p>放行李，15 分鐘內出門。退稅用的護照帶著。</p></div></li>
+      <li class="move"><div class="time">18:30</div><div class="dot"></div><div class="body"><h3>山手線新宿 → 澀谷，5 分</h3></div></li>
+      <li><div class="time">18:35</div><div class="dot"></div><div class="body"><h3>澀谷買衣服 <span class="chip you">你的提議</span></h3><p>到 19:00，有就買沒有就走。SHIBUYA109、Scramble Square、中央街都在站旁。</p></div></li>
+      <li class="move"><div class="time">19:00</div><div class="dot"></div><div class="body"><h3>銀座線澀谷 → 新橋，約 18 分，出站走 3 分</h3></div></li>
+      <li class="key"><div class="time">19:20</div><div class="dot"></div><div class="body"><h3>博品館 TOY PARK</h3><p>銀座 8 丁目。看陀螺貨況到 19:55，20:00 關門。這是整晚最緊的一段。</p></div></li>
+      <li class="eat"><div class="time">20:05</div><div class="dot"></div><div class="body"><h3>銀座 三よし 和牛レア天丼 <span class="chip you">你指定</span></h3><p>銀座 6-3-15，走 7 分。平日晚餐 17:30 到 22:00，L.O. 21:30。約 45 分。</p></div></li>
+      <li class="opt"><div class="time">可選</div><div class="dot"></div><div class="body"><h3>銀座オリオンズ 焦糖布丁</h3><p>同在銀座，到時候看時間和體力。塞進去的話鐵塔改 21:45 上去。</p></div></li>
+      <li class="move"><div class="time">20:55</div><div class="dot"></div><div class="body"><h3>走 8 分到大江戶線汐留站，2 站到赤羽橋，出站走 5 分</h3></div></li>
+      <li class="key"><div class="time">21:15</div><div class="dot"></div><div class="body"><h3>東京鐵塔 主甲板 萬聖節光雕秀 <span class="chip you">你指定</span></h3><p>「城市之光幻想曲～2026 萬聖節派對～」主甲板 2 樓北側，每日 18:00 到 22:50 循環，最後入場 22:30。買主甲板票即可。</p></div></li>
+      <li class="move"><div class="time">22:15</div><div class="dot"></div><div class="body"><h3>赤羽橋大江戶線直達新宿，約 20 分。明天要早起</h3></div></li>
+    </ol>
+    <div class="backup">
+      <h3>備用行程<small>出狀況時這樣改</small></h3>
+      <ul class="bk">
+        <li><span class="k">N'EX 誤點</span><span><b>砍博品館。</b>18:35 澀谷 → 19:00 銀座線到銀座 → 19:20 三よし → 20:30 鐵塔。整條線多出 45 分鐘，貨況 10/11 在 Bic 池袋補看。</span></li>
+        <li><span class="k">三よし 排太長</span><span><b>改 麺屋ひょっとこ 有楽町店。</b>柚子鹽拉麵，有樂町站旁，離博品館走 8 分，上餐快。<span class="rt">再不行就博品館旁邊隨便吃，鐵塔不要錯過。</span></span></li>
+        <li><span class="k">衣服沒買到</span><span><b>10/12 澀谷 AIR TWOKYO 之後補 30 分鐘。</b></span></li>
+        <li><span class="k">下雨 雲厚</span><span><b>鐵塔改 10/12 晚上</b>，秋葉原逛完 21:00 從秋葉原過去，22:30 前入場；或這趟放棄。</span></li>
+        <li><span class="k">太累</span><span><b>砍澀谷。</b>18:05 到新宿 → 丸之內線直達銀座 16 分 → 18:40 三よし → 19:30 博品館 → 20:20 鐵塔。最輕鬆的版本。</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 10/10 ========== -->
+  <section class="panel" id="d10" role="tabpanel" aria-labelledby="t10">
+    <div class="dayhead">
+      <div class="num">10<small>SAT</small></div>
+      <div><h2>發售日：ますのや 排隊 → 下北澤 Beyblade Bar 四場 <span class="tag">連休 D1</span></h2><div class="sub">BX-52、BX-53、BX-56 發售。買完直衝下北澤，中間不塞別的。</div></div>
+    </div>
+    <ol class="tl">
+      <li class="move"><div class="time">07:45</div><div class="dot"></div><div class="body"><h3>新宿出門。山手線到日暮里，常磐線 1 站到北千住，東武線到西新井，約 50 分。站前轉都營公車或步行 18 分</h3></div></li>
+      <li class="key"><div class="time">08:50</div><div class="dot"></div><div class="body"><h3>ますのや 門口排隊 <span class="chip you">你指定</span></h3><p>足立区島根 2-25-17。9:30 開店，新品買完就走，不逛。筆記說新品也許可以買 2。</p></div></li>
+      <li class="move"><div class="time">10:00</div><div class="dot"></div><div class="body"><h3>西新井 → 北千住 → 千代田線直通小田急 → 下北澤，約 65 分</h3></div></li>
+      <li class="eat"><div class="time">11:10</div><div class="dot"></div><div class="body"><h3>下北澤午餐</h3><p>慢慢吃，順便確認 Bar 位置。附近沒有其他陀螺店。</p></div></li>
+      <li class="key"><div class="time">12:45</div><div class="dot"></div><div class="body"><h3>Beyblade Bar 第一場 </h3><p>每人最多 3 顆、同型號 1 顆、新品每桌 1 顆。早場和下午場品項不同。</p></div></li>
+      <li class="key"><div class="time">14:30</div><div class="dot"></div><div class="body"><h3>第二場 </h3></div></li>
+      <li class="eat"><div class="time">16:15</div><div class="dot"></div><div class="body"><h3>下北澤晚餐、休息 2 小時</h3><p>16:30 那場沒訂，剛好吃飯。</p></div></li>
+      <li class="key"><div class="time">18:15</div><div class="dot"></div><div class="body"><h3>第三場 </h3><p>下午會補一次貨。</p></div></li>
+      <li class="key"><div class="time">20:00</div><div class="dot"></div><div class="body"><h3>第四場 </h3><p>約 21:30 離開。</p></div></li>
+      <li class="opt"><div class="time">21:30</div><div class="dot"></div><div class="body"><h3>宵夜</h3><p>想吃再吃，下北澤拉麵和居酒屋都開到深夜。</p></div></li>
+      <li class="move"><div class="time">22:30</div><div class="dot"></div><div class="body"><h3>小田急下北澤 → 新宿，10 分</h3></div></li>
+    </ol>
+    <div class="backup">
+      <h3>備用行程</h3>
+      <ul class="bk">
+        <li><span class="k">ますのや 沒貨</span><span><b>不追。</b>Bar 發售日一定有，一桌一顆；10/13 上野再補。別去電器行排，很多限小孩。</span></li>
+        <li><span class="k">16:15 累了</span><span><b>回新宿休息。</b>小田急 10 分，18:00 再回來，不影響 18:15 場。</span></li>
+        <li><span class="k">公車等太久</span><span><b>西新井站步行 18 分</b>，或梅島站也差不多遠。8:00 到西新井都來得及。</span></li>
+        <li><span class="k">被認定掃貨</span><span><b>會被黑名單。</b>別一次掃太多，三顆上限就好。</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 10/11 ========== -->
+  <section class="panel" id="d11" role="tabpanel" aria-labelledby="t11">
+    <div class="dayhead">
+      <div class="num">11<small>SUN</small></div>
+      <div><h2>Beyblade Bar 三場 → 池袋夜來祭壓軸 → いろは <span class="tag">連休 D2</span></h2><div class="sub">中午只空 2 小時 15 分，所以池袋放晚上。</div></div>
+    </div>
+    <ol class="tl">
+      <li class="move"><div class="time">10:20</div><div class="dot"></div><div class="body"><h3>小田急新宿 → 下北澤，10 分</h3></div></li>
+      <li><div class="time">10:30</div><div class="dot"></div><div class="body"><h3>下北澤喝咖啡</h3></div></li>
+      <li class="key"><div class="time">11:00</div><div class="dot"></div><div class="body"><h3>Beyblade Bar 第一場 </h3></div></li>
+      <li class="key"><div class="time">12:45</div><div class="dot"></div><div class="body"><h3>第二場 </h3><p>約 14:15 結束。</p></div></li>
+      <li class="eat"><div class="time">14:15</div><div class="dot"></div><div class="body"><h3>下北澤午餐、休息</h3><p>到 16:30，共 2 小時 15 分。</p></div></li>
+      <li class="opt"><div class="time">可選</div><div class="dot"></div><div class="body"><h3>原宿 Kiddy Land 看陀螺</h3><p>千代田線直通明治神宮前 10 分，15:50 前回程。新品多用抽選，現貨看運氣。</p></div></li>
+      <li class="key"><div class="time">16:30</div><div class="dot"></div><div class="body"><h3>第三場 </h3><p>約 18:00 結束。</p></div></li>
+      <li class="move"><div class="time">18:05</div><div class="dot"></div><div class="body"><h3>小田急到新宿 10 分，山手線到池袋 8 分</h3></div></li>
+      <li class="key"><div class="time">18:30</div><div class="dot"></div><div class="body"><h3>東京夜來祭 池袋西口公園 <span class="chip you">你選的</span></h3><p>週日正式賽尾聲和總踊，活動到 20:00。100 隊 5,000 人，免費。總踊確切時間開幕前官網公布。</p></div></li>
+      <li class="eat"><div class="time">19:45</div><div class="dot"></div><div class="body"><h3>東口 牛かつ いろは <span class="chip you">你指定</span></h3><p>東池袋 1-9-7 B1F，東口 1 分，約 22:00 關。隔壁巷 いづも 鰻玉丼 L.O. 22:00，看哪家排隊短。</p></div></li>
+      <li><div class="time">20:45</div><div class="dot"></div><div class="body"><h3>Bic Camera 池袋</h3><p>看陀螺、辦 Bic App（外國人可辦，人要在日本）。22:00 關。池袋 LABI 不要去，外國人買不到。</p></div></li>
+      <li class="move"><div class="time">21:30</div><div class="dot"></div><div class="body"><h3>山手線池袋 → 新宿，8 分</h3></div></li>
+    </ol>
+    <div class="backup">
+      <h3>備用行程</h3>
+      <ul class="bk">
+        <li><span class="k">下雨</span><span><b>夜來祭改原宿組。</b>18:05 千代田線直通明治神宮前 10 分，Kiddy Land 到 21:00，晚餐 Sama Curry 湯咖哩，再去池袋吃 いろは 也來得及。</span></li>
+        <li><span class="k">10/9 鐵塔沒看到</span><span><b>這晚不適合補</b>，池袋到赤羽橋 35 分，吃完 いろは 再去會超過 22:30 入場。鐵塔備案放 10/12。</span></li>
+        <li><span class="k">中午想出去</span><span><b>只有原宿划算。</b>池袋、神樂坂、秋葉原來回都要 50 到 80 分鐘，剩不到 1 小時。</span></li>
+        <li><span class="k">夜來祭提早散場</span><span><b>直接去 いろは</b>，19:00 進店人更少，之後 Bic 多逛一點。</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 10/12 ========== -->
+  <section class="panel" id="d12" role="tabpanel" aria-labelledby="t12">
+    <div class="dayhead">
+      <div class="num">12<small>MON</small></div>
+      <div><h2>鎌倉一日 → 澀谷 AIR TWOKYO → 秋葉原 <span class="tag">體育之日</span></h2><div class="sub">五點多回東京，不待太晚。秋葉原的店晚上才全開，所以放這天傍晚。</div></div>
+    </div>
+    <ol class="tl">
+      <li class="move"><div class="time">08:00</div><div class="dot"></div><div class="body"><h3>新宿 湘南新宿線直達北鎌倉，約 1 小時，Suica 直接刷</h3></div></li>
+      <li class="key"><div class="time">09:00</div><div class="dot"></div><div class="body"><h3>圓覺寺 → 建長寺</h3><p>北鎌倉下車先走兩座禪寺，三連休唯一清淨的時段。建長寺後山可眺望相模灣。</p></div></li>
+      <li><div class="time">10:30</div><div class="dot"></div><div class="body"><h3>鶴岡八幡宮</h3><p>從建長寺步行 15 分，順參道進市區。</p></div></li>
+      <li class="eat"><div class="time">11:15</div><div class="dot"></div><div class="body"><h3>小町通午餐</h3><p>吻仔魚丼、鎌倉丼、可樂餅。假日 12 點後會塞，提早吃。</p></div></li>
+      <li class="opt"><div class="time">12:30</div><div class="dot"></div><div class="body"><h3>報國寺竹林抹茶</h3><p>鎌倉站公車 10 分，竹林茶席喝抹茶配和菓子，來回約 1 小時 20 分。累了就跳過直接去長谷。</p></div></li>
+      <li class="key"><div class="time">14:00</div><div class="dot"></div><div class="body"><h3>長谷：鎌倉大佛、長谷寺、御靈神社 <span class="chip sea">江ノ電</span></h3><p>大佛 16:45 關，長谷寺見晴台看海，出來順路走御靈神社拍鳥居和電車。江之電假日很擠，一日券在鎌倉站買。</p></div></li>
+      <li class="opt"><div class="time">15:15</div><div class="dot"></div><div class="body"><h3>鎌倉高校前平交道</h3><p>灌籃高手場景，假日要排隊拍，拍完就走。趕時間就跳過。</p></div></li>
+      <li class="move"><div class="time">16:00</div><div class="dot"></div><div class="body"><h3>鎌倉站 湘南新宿線直達澀谷，約 1 小時</h3></div></li>
+      <li class="key"><div class="time">17:05</div><div class="dot"></div><div class="body"><h3>AIR TWOKYO 快閃店 <span class="chip you">你指定</span></h3><p>MAGNET by SHIBUYA109 5F，澀谷站 A12 出口直結。到 17:50。人多發整理券、有購買上限。10/9 衣服沒買到的話這裡補。</p></div></li>
+      <li class="move"><div class="time">18:00</div><div class="dot"></div><div class="body"><h3>山手線澀谷 → 秋葉原，約 30 分</h3></div></li>
+      <li class="key"><div class="time">18:30</div><div class="dot"></div><div class="body"><h3>秋葉原：Mandarake、TamTam 先逛</h3><p>兩家 20:00 關。TamTam 外神田 6-14-2 4F。二手和絕版件看這裡。</p></div></li>
+      <li><div class="time">20:00</div><div class="dot"></div><div class="body"><h3>駿河屋 → ドンキ → Yodobashi Akiba</h3><p>駿河屋約 21:00 關，ドンキ 24 小時（常有鯊魚），Yodobashi 22:00。Yodobashi 的陀螺現在只賣小孩，其他樓層照逛。</p></div></li>
+      <li class="eat"><div class="time">20:30</div><div class="dot"></div><div class="body"><h3>秋葉原晚餐</h3><p>站周邊拉麵、咖哩、丼飯都快。</p></div></li>
+      <li class="move"><div class="time">21:00</div><div class="dot"></div><div class="body"><h3>中央線秋葉原 → 新宿（御茶之水轉車），約 20 分</h3></div></li>
+    </ol>
+    <div class="backup">
+      <h3>備用行程<small>18:00 之後的三個替代版本，你還沒拍板</small></h3>
+      <ul class="bk">
+        <li><span class="k">A 燒肉</span><span><b>焼肉にくだらけ 西麻布</b>，表參道轉千代田線到乃木坂走 10 分，18:30 進店，20:00 吃完，六本木大江戶線直達新宿 20:30 到。<span class="rt">17:00 到 23:00、L.O. 22:00，假日有不定休，訂位時確認。電話 050-5486-8466。秋葉原這趟就沒了。</span></span></li>
+        <li><span class="k">B 刨冰</span><span><b>先去水道橋 Ancredoré</b>，澀谷半藏門線九段下轉三田線 1 站，18:15 吃 30 分，總武線 2 站 18:55 到秋葉原。只少 30 分鐘。<span class="rt">11:00 到 20:00。10 月桃季已過，先看 IG 當季口味。</span></span></li>
+        <li><span class="k">C 鰻魚飯</span><span><b>先去池袋 いづも 鰻玉丼</b>，山手線 15 分，18:15 進店，19:05 山手線 25 分，19:30 到秋葉原。Mandarake 只剩 30 分鐘。<span class="rt">10/11 吃過 いろは 的話，這樣兩家都吃到。</span></span></li>
+        <li><span class="k">AIR TWOKYO 沒開</span><span><b>出發前打 03-6450-5353 確認。</b>沒開就 16:00 不用趕，鎌倉留到稻村崎看日落（約 17:05），17:30 回程，18:45 直接到秋葉原。</span></li>
+        <li><span class="k">10/9 鐵塔沒看到</span><span><b>秋葉原 20:30 結束</b>，日比谷線秋葉原 → 神谷町 15 分，走 7 分，21:00 上塔，22:30 前入場。</span></li>
+        <li><span class="k">鎌倉下雨</span><span><b>寺廟照走，海線砍掉。</b>長谷逛完 15:00 就回澀谷，秋葉原多 1 小時。</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 10/13 ========== -->
+  <section class="panel" id="d13" role="tabpanel" aria-labelledby="t13">
+    <div class="dayhead">
+      <div class="num">13<small>TUE</small></div>
+      <div><h2>行李帶著走 → 上野採買 → Skyliner 直達成田</h2><div class="sub">不回新宿拿行李，省 40 分鐘。15:40 起飛。</div></div>
+    </div>
+    <ol class="tl">
+      <li class="move"><div class="time">07:45</div><div class="dot"></div><div class="body"><h3>新宿退房，行李帶著。山手線到上野約 25 分</h3></div></li>
+      <li><div class="time">08:15</div><div class="dot"></div><div class="body"><h3>上野站置物櫃</h3><p>JR 上野和京成上野都有大型櫃。退稅品放易拿的位置。</p></div></li>
+      <li class="move"><div class="time">08:25</div><div class="dot"></div><div class="body"><h3>山手線 1 站到秋葉原</h3></div></li>
+      <li><div class="time">08:30</div><div class="dot"></div><div class="body"><h3>秋葉原 ドンキ 掃一圈</h3><p>24 小時，20 分鐘。10/12 沒去成的話多留一點。</p></div></li>
+      <li class="move"><div class="time">09:15</div><div class="dot"></div><div class="body"><h3>回上野</h3></div></li>
+      <li><div class="time">09:30</div><div class="dot"></div><div class="body"><h3>Yodobashi 上野 開店</h3><p>Yodobashi 會員遊客可辦。</p></div></li>
+      <li class="key"><div class="time">10:00</div><div class="dot"></div><div class="body"><h3>Yamashiroya ヤマシロヤ 開店 <span class="chip ok">主採買</span></h3><p>JR 上野站広小路口 1 分，10:00 到 21:30。筆記裡「搶新品首選」，一樓看陀螺，樓上六層玩具。今天不是發售日不用早排。</p></div></li>
+      <li class="eat"><div class="time">10:45</div><div class="dot"></div><div class="body"><h3>早午餐</h3><p>御徒町 Aidaya 海鮮丼 11:00 開、上野 宇奈とと 平價鰻魚飯，或站內快速吃。</p></div></li>
+      <li class="move"><div class="time">11:40</div><div class="dot"></div><div class="body"><h3>取行李，京成上野 Skyliner 直達成田，約 41 分</h3></div></li>
+      <li class="key"><div class="time">12:30</div><div class="dot"></div><div class="body"><h3>成田機場，報到、退稅檢查</h3><p>海關可能抽查退稅品。Beyblade 盒裝可拆外盒減體積，退稅品不拆封。</p></div></li>
+      <li class="key"><div class="time">15:40<small>DEP</small></div><div class="dot"></div><div class="body"><h3>起飛</h3></div></li>
+    </ol>
+    <div class="backup">
+      <h3>備用行程</h3>
+      <ul class="bk">
+        <li><span class="k">最晚出發</span><span><b>Skyliner 12:30 從京成上野出發都來得及</b>，所以採買最多逛到 12:15。</span></li>
+        <li><span class="k">刨冰沒吃到</span><span><b>水道橋 Ancredoré 11:00 第一組。</b>10:45 從上野總武線過去 12 分，11:30 吃完，11:50 回上野，Skyliner 12:20。</span></li>
+        <li><span class="k">hitoma 布丁</span><span><b>上野稻荷町</b>，台東區松が谷 1-13-10。開店時間查不到，有開再去，走路 10 分。</span></li>
+        <li><span class="k">置物櫃滿</span><span><b>京成上野站旁也有行李寄放櫃台</b>，或秋葉原站置物櫃先放，回程經過再拿。</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== 備選 ========== -->
+  <section class="panel" id="alt" role="tabpanel" aria-labelledby="talt">
+    <div class="dayhead">
+      <div class="num">＋<small>備選</small></div>
+      <div><h2>備選的食物、活動、景點</h2><div class="sub">沒排進主線但隨時可以換上的。灰色劃掉是這趟對不上日期的。</div></div>
+    </div>
+    <div class="lists">
+      <div class="lst">
+        <h3>食物</h3>
+        <ul>
+          <li><span><b>いづも 池袋 鰻玉丼</b><span class="d">東口站前巷，11:30–23:00，L.O. 22:00，無休。10/11 晚上與 いろは 二選一，或 10/12 版本 C</span></span><span class="w">10/11 · 10/12</span></li>
+          <li><span><b>焼肉にくだらけ 田村和牛</b><span class="d">西麻布 1-12-5 2F，六本木站 9 分。17:00–23:00，L.O. 22:00，假日不定休。10/12 版本 A</span></span><span class="w">10/12</span></li>
+          <li><span><b>Tokyo Shave Ice Ancredoré 水蜜桃冰</b><span class="d">神田三崎町 3-3-25，水道橋。11:00–20:00。10 月桃季已過，看 IG 當季口味</span></span><span class="w">10/12 · 10/13</span></li>
+          <li><span><b>銀座オリオンズ 焦糖布丁</b><span class="d">銀座，三よし 飯後可選</span></span><span class="w">10/9</span></li>
+          <li><span><b>麺屋ひょっとこ 有楽町店 柚子鹽拉麵</b><span class="d">有樂町站旁，三よし 的替代</span></span><span class="w">10/9</span></li>
+          <li><span><b>Sama Curry 原宿 湯咖哩</b><span class="d">10/11 下雨改原宿組時的晚餐</span></span><span class="w">10/11</span></li>
+          <li><span><b>Aidaya あいだや 海鮮丼</b><span class="d">御徒町，11:00 開，排隊名店</span></span><span class="w">10/13</span></li>
+          <li><span><b>名代宇奈とと 平價鰻魚飯</b><span class="d">上野、新宿都有店</span></span><span class="w">10/13</span></li>
+          <li><span><b>hitoma コーヒーとお酒 布丁</b><span class="d">上野稻荷町，深夜咖啡店，預約看 IG 限動。水蜜桃可能已換水果</span></span><span class="w">10/13</span></li>
+          <li><span><b>MENYA NAKAGAWA 拉麵</b><span class="d">池袋，10/11 晚上第三選擇</span></span><span class="w">10/11</span></li>
+          <li><span><b>串若丸 Kushiwakamaru 串燒居酒屋</b><span class="d">中目黑，澀谷東橫線 1 站，常排隊</span></span><span class="w">10/12</span></li>
+          <li class="out"><span><b>鮨ト酒肴 富かわ omakase</b><span class="d">吉祥寺，10 月位子 10/2 已放完，有候補才談。電話 050-5593-8660</span></span><span class="w">—</span></li>
+          <li class="out"><span><b>うどん屋 新堀</b><span class="d">新宿新南口，週日休、L.O. 21:30，四天都對不上</span></span><span class="w">—</span></li>
+          <li class="out"><span><b>かね田 Kaneda</b><span class="d">東京站 KITTE 的是拉麵店，店名待你確認</span></span><span class="w">—</span></li>
+          <li class="out"><span><b>目黑秋刀魚祭</b><span class="d">10/11，烤秋刀魚抽籤已截止</span></span><span class="w">—</span></li>
+        </ul>
+      </div>
+      <div class="lst">
+        <h3>活動</h3>
+        <ul>
+          <li><span><b>神樂坂 化貓節</b><span class="d">10/11 10:00–17:00，遊行 12:20、14:30、15:20、16:30。下北澤過去 40 分，中午空檔只看得到 14:30 一場</span></span><span class="w">10/11</span></li>
+          <li><span><b>東京夜來祭 10/10 預祭</b><span class="d">池袋，規模較小。10/10 人在下北澤，去不了</span></span><span class="w">—</span></li>
+          <li><span><b>昭和紀念公園 波斯菊花祭</b><span class="d">立川，到 10/25，9:30–17:00，450 日圓。黃色 Lemon Bright 花期 9 月已過，10 月是粉白 Sensation</span></span><span class="w">對不上</span></li>
+          <li class="out"><span><b>向島百花園 萩まつり</b><span class="d">東向島，到 10/12，花況過盛期。你決定 10/10 不繞</span></span><span class="w">—</span></li>
+        </ul>
+      </div>
+      <div class="lst">
+        <h3>景點 · 店家</h3>
+        <ul>
+          <li><span><b>Kiddy Land 原宿</b><span class="d">表參道，到 21:00。陀螺新品多用 livepocket 抽選</span></span><span class="w">10/11 中午</span></li>
+          <li><span><b>Bic Camera 澀谷 · 澀谷 LABI</b><span class="d">AIR TWOKYO 走路 5 分。LABI 要 LABI App 加 Beyblade App 登錄 3 顆才能買</span></span><span class="w">10/12</span></li>
+          <li><span><b>Toppa!!! Base Akiba</b><span class="d">秋葉原站 ecute 改札內，10:00–21:00。6 月陀螺聯名已結束</span></span><span class="w">10/12 · 10/13</span></li>
+          <li><span><b>稻村崎日落 · 江之島 Sea Candle</b><span class="d">鎌倉海線。日落約 17:05。AIR TWOKYO 沒開時才留下來看</span></span><span class="w">10/12</span></li>
+          <li><span><b>Alpen TOKYO</b><span class="d">新宿東口，有沒有陀螺沒查到。晚上回新宿路過可看</span></span><span class="w">任一晚</span></li>
+          <li><span><b>ヤマダ Tecc LIFE SELECT 足立竹の塚</b><span class="d">竹ノ塚站 5 分，10:00 開。電器行常限小孩。你決定 10/10 不繞</span></span><span class="w">—</span></li>
+          <li class="out"><span><b>河口湖 · 御殿場 Outlet · 立川玩具反斗城</b><span class="d">10/12 選了鎌倉</span></span><span class="w">—</span></li>
+          <li class="out"><span><b>Kiddy Land 吉祥寺 · Cafe Montana</b><span class="d">路線不經過吉祥寺</span></span><span class="w">—</span></li>
+          <li class="out"><span><b>Bic 調布 · 成城 · 港北 · AEON 東久留米 · 台場反斗城</b><span class="d">太遠</span></span><span class="w">—</span></li>
+          <li class="out"><span><b>池袋 LABI · 秋葉原 Yodobashi 陀螺櫃</b><span class="d">外國人買不到 / 只賣小孩</span></span><span class="w">—</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="rules">
+      <h3>陀螺採買規則，來自你的筆記</h3>
+      <ul>
+        <li><b>Beyblade Bar：</b>每人 3 顆、同型號 1 顆、新品每桌 1 顆。早場和下午場品項不同，下午補一次貨。被認定掃貨會被黑名單。</li>
+        <li><b>電器行：</b>很多限 6 到 12 歲小孩，店員會審核是否親子。池袋 LABI 要在留卡，外國人買不到。</li>
+        <li><b>會員 App：</b>Bic Camera App 外國人可辦但人要在日本，10/11 在池袋辦。Yodobashi 會員遊客可辦。LABI 要到店輸入店鋪代碼。</li>
+        <li><b>退稅：</b>Bic Camera 可退稅。退稅品不拆封，機場海關可能抽查。</li>
+        <li><b>新品：</b>10/10 發售 BX-52 ラスタードラグーン、BX-53 オールインワンセット（¥7,480）、BX-56 左迴旋發射器。發售後兩週日亞會回流，不用硬搶。</li>
+      </ul>
+    </div>
+  </section>
+
+  <p class="src">
+    參考：<a href="https://www.tokyotower.co.jp/event/halloween2026/">東京鐵塔 Halloween party 2026</a> ·
+    <a href="https://airtwokyo.com/ja-us/blogs/news/2">AIR TWOKYO 官網公告</a> ·
+    <a href="https://magnetbyshibuya109.jp/en/shop/air-twokyo-pop-up-store-in-magnet-by-shibuya109/">MAGNET 店舖頁</a> ·
+    <a href="https://www.gotokyo.org/jp/spot/ev067/index.html">東京夜來祭</a> ·
+    <a href="https://bakeneko.oops.jp/">化貓節</a> ·
+    <a href="https://www.tablecheck.com/ja/shops/beyblade-bar/reserve/login_required">Beyblade Bar 訂位</a> ·
+    <a href="https://aumo.jp/articles/18978">銀座 三よし</a> ·
+    <a href="https://san-tatsu.jp/spots/209062/">牛かつ いろは</a> ·
+    <a href="https://r.gnavi.co.jp/hkck36me0000/">いづも 池袋</a> ·
+    <a href="https://r.gnavi.co.jp/gj3z500/">焼肉 にくだらけ</a> ·
+    <a href="https://afterthirtytravel.tw/kamakura-attractions/">鎌倉景點文章</a> ·
+    你的筆記《戰鬥陀螺_日本購買整理.md》
+  </p>
+</div>
+
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('.tabs button'));
+  var panels=[].slice.call(document.querySelectorAll('.panel'));
+  function show(id,push){
+    panels.forEach(function(p){p.classList.toggle('on',p.id===id)});
+    tabs.forEach(function(t){t.setAttribute('aria-selected',t.getAttribute('aria-controls')===id?'true':'false')});
+    if(push){try{history.replaceState(null,'','#'+id)}catch(e){}}
+    try{localStorage.setItem('trip-tab',id)}catch(e){}
+    var sel=document.querySelector('.tabs button[aria-selected="true"]');
+    if(sel&&sel.scrollIntoView){sel.scrollIntoView({block:'nearest',inline:'center'})}
+  }
+  tabs.forEach(function(t){t.addEventListener('click',function(){show(t.getAttribute('aria-controls'),true);window.scrollTo({top:0})})});
+  var ids=panels.map(function(p){return p.id});
+  var h=(location.hash||'').replace('#','');
+  var saved='';try{saved=localStorage.getItem('trip-tab')||''}catch(e){}
+  show(ids.indexOf(h)>-1?h:(ids.indexOf(saved)>-1?saved:'d09'),false);
+  window.addEventListener('hashchange',function(){var x=(location.hash||'').replace('#','');if(ids.indexOf(x)>-1)show(x,false)});
+})();
+</script>
+</body>
+</html>

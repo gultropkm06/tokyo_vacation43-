@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>東京行程取捨板</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: 候選卡片 → 想吃的店 → 陀螺店清單 → 每日可塞 → 目前安排 → 待決事項；延用行程頁的時刻表視覺 */
+:root{
+  --paper:#f6f3ec;--ink:#1c2230;--ink-2:#5a6170;--line:#d9d3c6;--card:#fffdf8;
+  --tower:#d9482b;--tower-soft:#f7ddd4;
+  --sea:#2f6f7e;--sea-soft:#d8e9ec;
+  --warn:#b0761a;--warn-soft:#f5e7cc;
+  --ok:#3d7a4a;--ok-soft:#dcebdc;
+  --dead:#8a8f99;--dead-soft:#e9e7e1;
+  --font-display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --font-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#15181f;--ink:#ece7dc;--ink-2:#a3a7b1;--line:#2d323d;--card:#1d212a;
+    --tower:#ff7a5c;--tower-soft:#3a251f;--sea:#6fb9c8;--sea-soft:#1c3238;
+    --warn:#e2a94a;--warn-soft:#35291a;--ok:#7cc48a;--ok-soft:#1f3324;--dead:#7b808a;--dead-soft:#262a32;color-scheme:dark
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#15181f;--ink:#ece7dc;--ink-2:#a3a7b1;--line:#2d323d;--card:#1d212a;
+  --tower:#ff7a5c;--tower-soft:#3a251f;--sea:#6fb9c8;--sea-soft:#1c3238;
+  --warn:#e2a94a;--warn-soft:#35291a;--ok:#7cc48a;--ok-soft:#1f3324;--dead:#7b808a;--dead-soft:#262a32;color-scheme:dark
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding-inline:16px;padding-block:0 64px}
+a{color:var(--tower)}
+:focus-visible{outline:2px solid var(--tower);outline-offset:2px}
+
+.hero{padding-block:36px 18px;border-bottom:2px solid var(--ink)}
+.hero .eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.hero h1{font-family:var(--font-display);font-weight:800;font-size:clamp(32px,7vw,46px);line-height:1.15;margin:8px 0 10px;text-wrap:balance}
+.hero h1 em{font-style:normal;color:var(--tower)}
+.hero p{margin:0;color:var(--ink-2);max-width:42em}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:14px;font-size:13px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+.alert{margin-top:18px;padding:12px 14px;border-left:4px solid var(--tower);background:var(--tower-soft);font-size:14px}
+.alert b{color:var(--tower)}
+.alert.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+.alert.ok b{color:var(--ok)}
+
+h2.sec{font-family:var(--font-display);font-size:clamp(20px,4.5vw,26px);margin:40px 0 6px;line-height:1.3}
+.sec-sub{color:var(--ink-2);font-size:14px;margin:0 0 16px}
+
+.cands{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.cand{border:1px solid var(--line);background:var(--card);padding:14px 14px 12px;display:grid;gap:8px;min-width:0;border-top:4px solid var(--line);align-content:start}
+.cand[data-rec="go"]{border-top-color:var(--ok)}
+.cand[data-rec="fixed"]{border-top-color:var(--ink)}
+.cand[data-rec="pick"]{border-top-color:var(--sea)}
+.cand[data-rec="maybe"]{border-top-color:var(--warn)}
+.cand[data-rec="drop"]{border-top-color:var(--dead)}
+.cand .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.cand .idx{font-family:var(--font-mono);font-size:11px;color:var(--ink-2);letter-spacing:.1em}
+.cand h3{margin:0;font-size:16px;line-height:1.4}
+.pill{font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;font-weight:500;align-self:flex-start}
+.pill.go{background:var(--ok-soft);color:var(--ok)}
+.pill.fixed{background:var(--ink);color:var(--paper)}
+.pill.pick{background:var(--sea-soft);color:var(--sea)}
+.pill.maybe{background:var(--warn-soft);color:var(--warn)}
+.pill.drop{background:var(--dead-soft);color:var(--dead)}
+.kv{display:grid;grid-template-columns:52px 1fr;gap:2px 8px;font-size:13px;margin:0}
+.kv dt{color:var(--ink-2);font-size:12px;padding-top:1px}
+.kv dd{margin:0;min-width:0}
+.cand .why{font-size:13px;color:var(--ink-2);border-top:1px dashed var(--line);padding-top:8px;margin:0}
+.cand .why b{color:var(--ink)}
+.state{display:flex;gap:6px;margin-top:2px}
+.state button{appearance:none;border:1px solid var(--line);background:transparent;color:var(--ink-2);font:inherit;font-size:12px;padding:3px 10px;border-radius:3px;cursor:pointer;line-height:1.5}
+.state button[data-v="yes"][aria-pressed="true"]{border-color:var(--ok);color:var(--ok);font-weight:700}
+.state button[data-v="no"][aria-pressed="true"]{border-color:var(--dead);color:var(--dead);text-decoration:line-through;font-weight:700}
+.cand.is-no{opacity:.55}
+
+.matrix-wrap{overflow-x:auto;border:1px solid var(--line);background:var(--card)}
+table.matrix{border-collapse:collapse;width:100%;min-width:600px;font-size:13px}
+.matrix th,.matrix td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.matrix th{font-family:var(--font-mono);font-weight:600;font-size:12px;letter-spacing:.04em;color:var(--ink-2);background:var(--paper)}
+.matrix td:first-child{font-weight:500;min-width:150px}
+.matrix tr.dropped td{color:var(--dead)}
+.matrix tr.dropped td:first-child{text-decoration:line-through}
+.matrix td .tag{display:inline-block;font-size:11px;padding:0 6px;border-radius:999px;margin-right:4px;font-weight:500}
+.tag.d9{background:var(--sea-soft);color:var(--sea)}
+.tag.d10{background:var(--tower-soft);color:var(--tower)}
+.tag.d11{background:var(--warn-soft);color:var(--warn)}
+.tag.d12{background:var(--ok-soft);color:var(--ok)}
+.tag.d13{background:var(--ink);color:var(--paper)}
+.tag.no{background:var(--dead-soft);color:var(--dead)}
+
+.days{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.dayc{border:1px solid var(--line);background:var(--card);min-width:0;display:grid;grid-template-rows:auto 1fr}
+.dayc header{padding:10px 14px;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.dayc header .d{font-family:var(--font-mono);font-weight:600;font-size:20px;color:var(--tower);font-variant-numeric:tabular-nums}
+.dayc header .w{font-size:12px;color:var(--ink-2);text-align:right}
+.dayc header .w b{display:block;color:var(--tower);font-weight:500;font-size:11px;letter-spacing:.06em}
+.grp{padding:10px 14px;border-bottom:1px solid var(--line)}
+.grp:last-child{border-bottom:0}
+.grp h4{margin:0 0 4px;font-size:11px;letter-spacing:.1em;font-family:var(--font-mono);font-weight:600}
+.grp.fix h4{color:var(--ink)}.grp.add h4{color:var(--ok)}.grp.nope h4{color:var(--dead)}
+.grp ul{margin:0;padding:0;list-style:none;font-size:13px}
+.grp li{display:grid;grid-template-columns:auto 1fr;gap:8px;padding:2px 0;color:var(--ink)}
+.grp li .t{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);min-width:44px;padding-top:2px;font-variant-numeric:tabular-nums}
+.grp li small{display:block;color:var(--ink-2);font-size:12px}
+.grp.nope li{color:var(--dead)}
+.grp.nope li .t{color:var(--dead)}
+.grp.add li .t{color:var(--ok)}
+.grp .empty{color:var(--ink-2);font-size:13px}
+
+.plan{display:grid;gap:12px}
+.pday{border:1px solid var(--line);background:var(--card);padding:14px 16px;display:grid;grid-template-columns:72px 1fr;gap:12px;min-width:0}
+.pday .d{font-family:var(--font-mono);font-weight:600;font-size:20px;line-height:1.1;color:var(--tower)}
+.pday .d small{display:block;font-size:11px;color:var(--ink-2);letter-spacing:.1em;margin-top:3px;font-weight:500}
+.pday .d .tag{display:inline-block;margin-top:6px;font-size:10px;color:var(--tower);border:1px solid currentColor;padding:0 5px;border-radius:2px;letter-spacing:.06em;background:none}
+.pday h3{margin:0 0 4px;font-size:16px}
+.pday ul{margin:0;padding-left:1.1em;font-size:14px;color:var(--ink-2)}
+.pday li{margin:2px 0}
+.pday li b{color:var(--ink);font-weight:500}
+.pday .open{margin-top:8px;padding:8px 10px;background:var(--warn-soft);border-left:3px solid var(--warn);font-size:13px}
+.pday .open b{color:var(--warn)}
+.pday .open.good{background:var(--ok-soft);border-left-color:var(--ok)}
+.pday .open.good b{color:var(--ok)}
+@media (max-width:480px){.pday{grid-template-columns:1fr}.pday .d{display:flex;gap:10px;align-items:baseline}.pday .d small,.pday .d .tag{margin-top:0}}
+
+.q{border:2px solid var(--ink);background:var(--card);padding:16px 18px;margin-top:12px}
+.q h3{margin:0 0 8px;font-size:17px;font-family:var(--font-display)}
+.q .num{font-family:var(--font-mono);color:var(--tower);margin-right:6px}
+.opts{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.opts li{display:grid;grid-template-columns:auto 1fr;gap:10px;font-size:14px;padding:8px 10px;border:1px solid var(--line);align-items:start}
+.opts li.rec{border-color:var(--ok);background:var(--ok-soft)}
+.opts .k{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);padding-top:3px}
+.opts li.rec .k{color:var(--ok)}
+.opts .cost{display:block;font-size:12px;color:var(--ink-2)}
+.reply{margin-top:28px;padding:14px 16px;border:1px dashed var(--line);font-size:14px;color:var(--ink-2)}
+.reply code{font-family:var(--font-mono);font-size:13px;color:var(--ink);background:var(--paper);padding:1px 6px}
+.srcs{margin-top:28px;font-size:12px;color:var(--ink-2);line-height:1.8}
+.srcs a{color:var(--ink-2)}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="eyebrow">TOKYO · 2026.10.09 → 10.13 · 取捨板 · 第 3 版</div>
+    <h1>兩天 Beyblade Bar，<em>其餘</em>怎麼接</h1>
+    <p>把你的筆記、Google Maps 清單、想吃的店全部對上行程骨架之後重排。全程只用電車和地鐵，不搭計程車。每張卡片可以點「要／不要」做記號，記號只存在你這台裝置上，決定好請直接回我。</p>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--ink)"></i>你指定的，不動</span>
+      <span><i class="dot" style="background:var(--ok)"></i>建議放進去</span>
+      <span><i class="dot" style="background:var(--sea)"></i>二選一</span>
+      <span><i class="dot" style="background:var(--warn)"></i>看情況</span>
+      <span><i class="dot" style="background:var(--dead)"></i>建議放棄</span>
+    </div>
+    <div class="alert ok"><b>Bar 訂位已更新：</b>10/10 四場（12:45、14:30、18:15、20:00），16:15 到 18:15 空 2 小時剛好吃晚餐。10/11 三場（11:00、12:45 16:30），中間只空 14:15 到 16:30。所以 10/11 的池袋改到晚上：18:00 第三場結束直接去池袋，夜來祭壓軸在傍晚，いろは 當晚餐。にくだらけ 改到 10/12 晚上，西麻布店 L.O. 22:00、週日營業，10/12 假日要打電話確認。</div>
+    <div class="alert"><b>筆記裡影響採買的三件事：</b>秋葉原 Yodobashi 9 月起「只賣小孩」，10/13 主採買改成上野 Yamashiroya 加上野 Yodobashi。發售日 10/10 新品在 Bar 一桌限 1 顆、每人最多 3 顆，ますのや 可能讓你買 2。Bic Camera 的 App 外國人可以辦、但人要在日本，10/9 晚上先在有樂町 Bic 辦好。</div>
+  </header>
+
+  <h2 class="sec">一、所有提過的項目</h2>
+  <p class="sec-sub">依出現順序。「窗口」是活動本身的日期與時段，「可放」是在這趟行程裡實際塞得進去的日子。</p>
+  <div class="cands" id="cands">
+
+    <article class="cand" data-rec="fixed" data-id="masunoya">
+      <div class="top"><div><div class="idx">01</div><h3>ますのや 桌遊＆玩具店</h3></div><span class="pill fixed">你指定 10/10 早上</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>9:30 開店，開店前排隊，買完就走不逛。發售日新品筆記說「也許可以買 2」</dd><dt>地點</dt><dd>足立区島根 2-25-17。東武線西新井或梅島站步行約 18 分，西新井站有公車</dd><dt>可放</dt><dd>10/10 8:45 到場排隊，10:00 前買完離開</dd></dl>
+      <p class="why"><b>買完直衝下北澤，</b>西新井到北千住轉千代田線直通約 65 分鐘，11:10 到，先吃午餐。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="fixed" data-id="bar">
+      <div class="top"><div><div class="idx">02</div><h3>Beyblade Bar Tokyo 下北澤</h3></div><span class="pill fixed">你指定 10/10 全天、10/11 兩場</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>場次固定 11:00、12:45、14:30、16:30、18:15、20:00，每場約 1.5 小時。<b>10/10 訂了 12:45、14:30、18:15、20:00 四場，16:30 那場沒訂，16:15 到 18:15 空 2 小時。10/11 訂了 11:00、12:45、16:30 三場，14:15 到 16:30 空 2 小時 15 分</b></dd><dt>地點</dt><dd>下北澤。千代田線直通：明治神宮前 10 分、表參道 12 分、乃木坂 15 分；小田急到新宿 10 分</dd><dt>可放</dt><dd>已定</dd></dl>
+      <p class="why"><b>限購：每人 3 顆、同型號 1 顆、新品每桌 1 顆。</b>早場和下午場品項不同，下午會補一次貨。被認定掃貨會被黑名單，別太猛。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="fixed" data-id="beyblade">
+      <div class="top"><div><div class="idx">03</div><h3>Beyblade 實體店採買</h3></div><span class="pill fixed">你指定 · 分三段</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>10/9 晚：銀座博品館（到 20:00）、有樂町 Bic（到 22:00）。10/11 午：原宿 Kiddy Land。10/13 早：上野 Yamashiroya 10:00 開、上野 Yodobashi 9:30 開、秋葉原 ドンキ 24 小時</dd><dt>地點</dt><dd>見下方「陀螺店清單」</dd><dt>可放</dt><dd>三段都不跟 Bar 衝突</dd></dl>
+      <p class="why"><b>10/10 晚上不買，</b>發售日晚上大店多半被掃空，人也累。秋葉原 Yodobashi 現在只賣小孩，主力改上野。很多電器行限 6 到 12 歲小孩，玩具店和 Bic 比較沒這問題。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="fixed" data-id="tower">
+      <div class="top"><div><div class="idx">04</div><h3>東京鐵塔 萬聖節光雕投影秀</h3></div><span class="pill fixed">你指定</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>9/11 到 10/31，每天 18:00 起循環演到 22:50（你在官網確認的），最後入場 22:30</dd><dt>地點</dt><dd>主甲板 2F 北側，赤羽橋站 5 分。三よし 走 8 分到大江戶線汐留站，2 站到赤羽橋，全程約 15 分</dd><dt>可放</dt><dd>10/9 20:45，三よし 之後；10/12 晚上留作天氣備案</dd></dl>
+      <p class="why"><b>週四晚上比三連休週日空，</b>而且讓 10/11 晚上可以早點休息。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="fixed" data-id="kamakura">
+      <div class="top"><div><div class="idx">05</div><h3>鎌倉・江之電</h3></div><span class="pill fixed">你選了 · 10/12</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>寺廟 16:00 到 16:30 關門，日落約 17:05</dd><dt>地點</dt><dd>東京南方，JR 約 55 分，不用訂票。回程湘南新宿線直達澀谷</dd><dt>可放</dt><dd>10/12 整天</dd></dl>
+      <p class="why"><b>我偏向這個。</b>骨架：北鎌倉兩寺、八幡宮、小町通、長谷大佛與長谷寺、御靈神社、鎌倉高校前、稻村崎日落。中午多的 1.5 小時給報國寺抹茶。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="drop" data-id="kawaguchiko">
+      <div class="top"><div><div class="idx">06</div><h3>河口湖</h3></div><span class="pill drop">落選</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>整天，新宿高速巴士約 1h50</dd><dt>地點</dt><dd>東京西方，京王與富士急訂票網站分開</dd><dt>可放</dt><dd>10/12 整天，或下午接昭和紀念公園、立川玩具反斗城</dd></dl>
+      <p class="why"><b>缺點：</b>三連休最後一天最塞，富士山要看運氣，去回程都要先訂票。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="fixed" data-id="airtwokyo">
+      <div class="top"><div><div class="idx">07</div><h3>AIR TWOKYO 快閃店</h3></div><span class="pill fixed">你指定 · 出發前確認</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>官網公告 2026/3/6 到 2027/2/28；MAGNET 店舖頁 10/8 仍列著，10:00 到 21:00</dd><dt>地點</dt><dd>MAGNET by SHIBUYA109 5F，澀谷站 A12 出口直結</dd><dt>可放</dt><dd>10/12 鎌倉提早回程，17:30 到澀谷，接著買衣服到 21:00</dd></dl>
+      <p class="why"><b>你貼的 9/30 是 X 開幕貼文的舊日期。</b>打 03-6450-5353 確認一次。人多時發整理券、有購買上限。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="drop" data-id="harajuku">
+      <div class="top"><div><div class="idx">08</div><h3>10/11 中段：原宿・表參道一組</h3></div><span class="pill drop">落選，留作備案</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>12:30 到 16:15，共 3 小時 45 分</dd><dt>地點</dt><dd>下北澤 → 千代田線直通明治神宮前 10 分。Kiddy Land 原宿、Sama Curry、AIR TWOKYO 都在走路範圍</dd><dt>可放</dt><dd>10/11 兩場 Bar 之間</dd></dl>
+      <p class="why"><b>想逛街喝咖啡選這組，想看祭典選池袋。</b>原宿 10 分鐘就到，Kiddy Land 是陀螺店；池袋 25 分鐘，有夜來祭、いろは 和 Bic。化貓節最遠，排第三。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="drop" data-id="bakeneko">
+      <div class="top"><div><div class="idx">09</div><h3>神樂坂 化貓節</h3></div><span class="pill drop">落選</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>10/11 10:00 到 17:00；遊行 12:20、14:30、15:20、16:30，每場 20 到 30 分</dd><dt>地點</dt><dd>神樂坂。下北澤 → 新宿 → 大江戶線飯田橋，約 40 分，回程也 40 分</dd><dt>可放</dt><dd>10/11 中段，只看得到 14:30 一場，Bar 第一場若拖到就連這場都危險</dd></dl>
+      <p class="why"><b>輸給夜來祭的原因：</b>遊行有固定時間、一場只有 20 到 30 分鐘、車程最遠。贏的地方是扮貓的畫面比較特別，小規模比較好拍。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="drop" data-id="showa">
+      <div class="top"><div><div class="idx">10</div><h3>昭和紀念公園 波斯菊</h3></div><span class="pill drop">隨河口湖落選</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>9/12 到 10/25，9:30 到 17:00，450 日圓</dd><dt>地點</dt><dd>立川，新宿 40 分。立川立飛的玩具反斗城就在隔壁站</dd><dt>可放</dt><dd>10/12 早上接河口湖</dd></dl>
+      <p class="why"><b>黃色 Lemon Bright 花期是 9 月，10 月只剩粉白 Sensation。</b>出發前看官網開花狀況。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="drop" data-id="hagi">
+      <div class="top"><div><div class="idx">11</div><h3>向島百花園 萩まつり</h3></div><span class="pill drop">你決定不繞</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>9/19 到 10/12，9:00 到 17:00，150 日圓</dd><dt>地點</dt><dd>東武線東向島站</dd><dt>可放</dt><dd>已放棄</dd></dl>
+      <p class="why"><b>10/10 買完直衝下北澤，</b>花況也過盛期了。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="fixed" data-id="yosakoi">
+      <div class="top"><div><div class="idx">12</div><h3>東京夜來祭 YOSAKOI</h3></div><span class="pill fixed">你選了 · 10/11 中段</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>10/11（日）10:30 到 20:00 整天連續演出，100 隊 5,000 人，不用對時間</dd><dt>地點</dt><dd>池袋西口公園等 6 個會場。下北澤 → 小田急新宿 → 山手線池袋，約 25 分</dd><dt>可放</dt><dd>10/11 13:00 到 15:40，兩場 Bar 之間</dd></dl>
+      <p class="why"><b>比化貓節近 15 分鐘、不用對遊行時間、規模大十倍，</b>而且東口就是 牛かつ いろは 和 Bic 池袋，午餐和陀螺一次解決。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand is-no" data-rec="drop" data-id="sanma">
+      <div class="top"><div><div class="idx">13</div><h3>目黑秋刀魚祭</h3></div><span class="pill drop">建議放棄</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>10/11 10:00 到 15:30</dd><dt>地點</dt><dd>目黑</dd><dt>可放</dt><dd>抽籤已截止</dd></dl>
+      <p class="why"><b>去了只能逛物產展。</b></p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="fixed" data-id="shopping">
+      <div class="top"><div><div class="idx">14</div><h3>10/13 最後一個早上</h3></div><span class="pill fixed">你指定 · 改成上野</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>09:30 到 11:30</dd><dt>地點</dt><dd>上野 Yamashiroya、上野 Yodobashi、秋葉原 ドンキ，三個點 1 站內</dd><dt>可放</dt><dd>10/13 早上</dd></dl>
+      <p class="why"><b>成田出：京成上野 Skyliner 直達 41 分。羽田出：上野到濱松町轉單軌約 45 分。</b>兩邊都順。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+  </div>
+
+  <h2 class="sec">一之二、想吃的店</h2>
+  <p class="sec-sub">你自己點名的店。綠色是順的，黃色要看條件，灰色這趟放不進去。</p>
+  <div class="cands">
+
+    <article class="cand" data-rec="go" data-id="mitsuyoshi">
+      <div class="top"><div><div class="idx">R1</div><h3>銀座 三よし（和牛レア天丼）</h3></div><span class="pill go">10/9 晚餐</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>平日 11:00–14:30、17:30–22:00（L.O. 21:30）。10/9 是週四，剛好平日</dd><dt>地點</dt><dd>中央區銀座 6-3-15，銀座站 4 分，電話 050-5592-5709</dd><dt>可放</dt><dd>10/9 17:30 開門第一輪，之後走 5 分到博品館</dd></dl>
+      <p class="why"><b>第一晚的錨點。</b>吃完 18:30 → 博品館（20:00 關）→ 20:00 東京鐵塔。羽田進的話京急直通淺草線到東銀座，行李先丟飯店再來。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="go" data-id="nikudarake">
+      <div class="top"><div><div class="idx">R2</div><h3>焼肉にくだらけ（田村和牛）</h3></div><span class="pill go">10/12 晚餐</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>17:00–23:00，L.O. 22:00，週日營業，不定休。全席個室，加 5% 服務費，ぐるなび網路預約，電話 050-5486-8466</dd><dt>地點</dt><dd>西麻布 1-12-5 SW六本木通りビル 2F，六本木站走 9 分、乃木坂站走 10 分</dd><dt>可放</dt><dd>10/12 19:15，澀谷 AIR TWOKYO 之後過去 25 分</dd></dl>
+      <p class="why"><b>10/11 晚上讓給夜來祭後移到這裡。</b>10/12 是假日，有不定休，訂位時一併確認有開；沒開就改池袋 いづも 或澀谷就地吃。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="go" data-id="izumo">
+      <div class="top"><div><div class="idx">R3</div><h3>いづも 池袋（鰻玉丼）</h3></div><span class="pill maybe">10/12 晚餐備案</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>11:30–23:00（L.O. 22:00），無休，電話 03-5992-8311</dd><dt>地點</dt><dd>池袋站東口站前巷內</dd><dt>可放</dt><dd>10/11 晚上跟 いろは 二選一（同在池袋東口）；或 10/12 選秋葉原版時，17:50 澀谷 → 18:15 池袋先吃 いづも → 19:30 再去秋葉原</dd></dl>
+      <p class="why"><b>兩家都想吃的話：</b>10/11 いろは、10/12 いづも 加秋葉原。代價是秋葉原 19:30 才到，Mandarake 只剩 30 分鐘，駿河屋和 Yodobashi 不受影響。10/13 中午來不及，它 11:30 才開。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="maybe" data-id="iroha">
+      <div class="top"><div><div class="idx">R4</div><h3>牛かつ いろは（Gyukatsu Iroha）</h3></div><span class="pill go">10/11 晚餐</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>約 11:00 到 22:00，無休，尖峰排隊</dd><dt>地點</dt><dd>東池袋 1-9-7 友光ビル B1F，池袋東口 1 分</dd><dt>可放</dt><dd>10/11 19:45，看完夜來祭壓軸後</dd></dl>
+      <p class="why"><b>10/11 晚上在池袋的晚餐。</b>19:45 進店，22:00 關門前綽綽有餘。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="drop" data-id="sama">
+      <div class="top"><div><div class="idx">R5</div><h3>Sama Curry 原宿（湯咖哩）</h3></div><span class="pill drop">隨原宿組落選</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>午餐</dd><dt>地點</dt><dd>原宿，明治神宮前站附近</dd><dt>可放</dt><dd>10/11 12:45，Bar 第一場結束直通過來</dd></dl>
+      <p class="why"><b>別人清單裡撿來的，</b>剛好補原宿組的午餐缺口。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+
+    <article class="cand" data-rec="maybe" data-id="kushiwakamaru">
+      <div class="top"><div><div class="idx">R7</div><h3>串若丸 Kushiwakamaru（居酒屋）</h3></div><span class="pill maybe">10/12 晚餐候補</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>晚上，常要排隊</dd><dt>地點</dt><dd>中目黑，澀谷東橫線 1 站</dd><dt>可放</dt><dd>10/12 晚上第三備案，排在 にくだらけ 和 いづも 之後</dd></dl>
+      <p class="why"><b>離 AIR TWOKYO 最近的一家。</b></p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand is-no" data-rec="drop" data-id="shimbori">
+      <div class="top"><div><div class="idx">R8</div><h3>うどん屋 新堀</h3></div><span class="pill drop">這趟放不進去</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>11:30–15:30、17:30–21:30 L.O.，週日休</dd><dt>地點</dt><dd>千駄ヶ谷 5-23-9，新宿新南口 3 分</dd><dt>可放</dt><dd>10/10 Bar 到 21:30 趕不上 L.O.；10/11 週日休；10/12 在鎌倉；10/13 中午要走</dd></dl>
+      <p class="why"><b>四天都對不上。</b>除非 10/12 選河口湖版且假日有開，回新宿 19:00 前吃。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="go" data-id="ancredore">
+      <div class="top"><div><div class="idx">R9</div><h3>Tokyo Shave Ice Ancredoré（水蜜桃冰）</h3></div><span class="pill go">10/12 秋葉原前順路</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>11:00–20:00</dd><dt>地點</dt><dd>神田三崎町 3-3-25，水道橋站。總武線到秋葉原 2 站 5 分</dd><dt>可放</dt><dd>10/12 18:15，澀谷半藏門線到九段下轉三田線 1 站，約 25 分；吃完 5 分鐘到秋葉原。備案 10/13 11:00 開門第一組，11:45 回上野搭 Skyliner</dd></dl>
+      <p class="why"><b>10/12 秋葉原版剛好經過，</b>代價是秋葉原少 30 分鐘。10 月水蜜桃季已過，通常換成栗子、葡萄或無花果，想吃桃先看 IG 當季口味。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="maybe" data-id="hitoma">
+      <div class="top"><div><div class="idx">R10</div><h3>hitoma コーヒーとお酒（布丁）</h3></div><span class="pill maybe">上野 · 10/13 早上順路</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>深夜營業的咖啡店，確切時間查不到，預約看 IG 限動</dd><dt>地點</dt><dd>台東區松が谷 1-13-10，稻荷町站或上野站</dd><dt>可放</dt><dd>10/13 早上若有開；或 10/9 宵夜</dd></dl>
+      <p class="why"><b>招牌水蜜桃布丁 10 月可能已換水果。</b>這家是咖啡店帶賣酒，不是酒吧，先留著。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="maybe" data-id="tomikawa">
+      <div class="top"><div><div class="idx">R11</div><h3>鮨ト酒肴 富かわ（omakase）</h3></div><span class="pill maybe">吉祥寺 · 訂位難</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>18:00–21:00，週三休，20 品 ¥9,900，每月 2 日中午開放次月預約</dd><dt>地點</dt><dd>吉祥寺站 5 分，電話 050-5593-8660</dd><dt>可放</dt><dd>10 月位子 10/2 就放完。有候補才談，只有 10/12 晚上能放，但那晚已有澀谷</dd></dl>
+      <p class="why"><b>這趟大概放棄，</b>除非你打電話問到位子。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand" data-rec="maybe" data-id="kaneda">
+      <div class="top"><div><div class="idx">R12</div><h3>かね田 Kaneda</h3></div><span class="pill maybe">店名待確認</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>東京這家在 KITTE 丸之內 B1，是中華そば店附手打蕎麥</dd><dt>地點</dt><dd>東京站 3 分</dd><dt>可放</dt><dd>目前路線不經過東京站</dd></dl>
+      <p class="why"><b>你寫的是蕎麥麵，</b>如果不是這家請給我正確店名。</p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+
+    <article class="cand is-no" data-rec="drop" data-id="vowz">
+      <div class="top"><div><div class="idx">R13</div><h3>坊主バー</h3></div><span class="pill drop">你說不要</span></div>
+      <dl class="kv"><dt>窗口</dt><dd>—</dd><dt>地點</dt><dd>四谷三丁目</dd><dt>可放</dt><dd>已移除</dd></dl>
+      <p class="why"><b>酒吧類不排。</b></p>
+      <div class="state"><button type="button" data-v="yes">要</button><button type="button" data-v="no">不要</button></div>
+    </article>
+  </div>
+
+  <h2 class="sec">一之三、陀螺店清單（你的 Google Maps ＋ 筆記）</h2>
+  <p class="sec-sub">顏色標籤是建議去的日子。筆記裡的限制也寫在備註。</p>
+  <div class="matrix-wrap">
+    <table class="matrix">
+      <thead><tr><th>店</th><th>地點</th><th>哪天順路</th><th>備註（來自你的筆記）</th></tr></thead>
+      <tbody>
+        <tr><td>ますのや</td><td>足立區島根，西新井</td><td><span class="tag d10">10/10 早</span></td><td>8:45 排隊，9:30 開，買完就走。發售日新品也許可買 2</td></tr>
+        <tr><td>Beyblade Bar Tokyo</td><td>下北澤</td><td><span class="tag d10">10/10</span><span class="tag d11">10/11</span></td><td>每人 3 顆、同型號 1、新品每桌 1。附近沒有別家陀螺店</td></tr>
+        <tr><td>銀座博品館 TOY PARK</td><td>銀座 8 丁目</td><td><span class="tag d9">10/9 晚</span></td><td>到 20:00。7 月、9 月都有貨。三よし 走 5 分</td></tr>
+        <tr><td>Bic Camera 有樂町</td><td>有樂町</td><td><span class="tag no">跟鐵塔撞</span></td><td>Bic App 改 10/12 晚在澀谷或池袋 Bic 辦，外國人可辦但人要在日本</td></tr>
+        <tr><td>Kiddy Land 原宿</td><td>表參道</td><td><span class="tag no">隨原宿組落選</span></td><td>10/11 中段選了池袋。10/12 從澀谷走過去 15 分可以補，但 AIR TWOKYO 21:00 關，Kiddy Land 也 21:00 關，二選一</td></tr>
+        <tr><td>Alpen TOKYO</td><td>新宿東口</td><td><span class="tag no">路線不經過</span></td><td>你清單裡有，但 10/10 晚上 Bar 到 21:30，新宿店 21:00 左右關</td></tr>
+        <tr><td>Bic Camera 澀谷 / 澀谷 LABI</td><td>澀谷</td><td><span class="tag d12">10/12 晚</span></td><td>AIR TWOKYO 同區。LABI 要 LABI App 加 Beyblade App 登錄 3 顆才能買</td></tr>
+        <tr><td>Yamashiroya ヤマシロヤ</td><td>上野站広小路口 1 分</td><td><span class="tag d13">10/13 早</span></td><td>10:00–21:30，筆記裡「搶新品首選」。10/13 不是發售日，不用早排</td></tr>
+        <tr><td>Yodobashi 上野</td><td>上野</td><td><span class="tag d13">10/13 早</span></td><td>9:30 開。Yodobashi 會員遊客可辦</td></tr>
+        <tr><td>秋葉原 ドンキ</td><td>秋葉原</td><td><span class="tag d13">10/13 早</span></td><td>24 小時。筆記說常有鯊魚</td></tr>
+        <tr><td>Toppa!!! Base Akiba</td><td>秋葉原站 ecute，改札內</td><td><span class="tag d13">10/13 早</span></td><td>10:00–21:00。6 月的陀螺聯名已結束，現在不一定有貨</td></tr>
+        <tr><td>TamTam 秋葉原</td><td>外神田 6-14-2 4F</td><td><span class="tag no">趕不上</span></td><td>開店時間查不到，一般 11:00，10/13 來不及</td></tr>
+        <tr><td>Yodobashi 秋葉原</td><td>秋葉原</td><td><span class="tag no">跳過</span></td><td>筆記 9/5：只賣小孩</td></tr>
+        <tr><td>池袋 LABI / Bic 池袋</td><td>池袋</td><td><span class="tag d11">10/11 午</span><span class="tag d12">10/12 晚</span></td><td>LABI 外國人買不到（要在留卡）。Bic 池袋可以，夜來祭那天 15:15 順便辦 Bic App，10/12 吃 いづも 前再看一次</td></tr>
+        <tr><td>ヤマダ Tecc LIFE SELECT 足立竹の塚</td><td>竹ノ塚站 5 分</td><td><span class="tag no">不繞</span></td><td>你決定 ますのや 買完直衝下北澤</td></tr>
+        <tr><td>玩具反斗城 立川立飛</td><td>立川</td><td><span class="tag d12">只有河口湖版</span></td><td>昭和紀念公園隔壁站。反斗城 10/10 可能進新品、10/10 與 10/31 有大會</td></tr>
+        <tr><td>Kiddy Land 吉祥寺</td><td>吉祥寺</td><td><span class="tag no">路線不經過</span></td><td>除非 富かわ 訂到位</td></tr>
+        <tr><td>台場玩具反斗城</td><td>台場</td><td><span class="tag no">太遠</span></td><td>筆記 9/5 有人撿到貨，但單程 40 分以上</td></tr>
+        <tr class="dropped"><td>Bic 調布、Kojima×Bic 成城、Kojima×Bic 港北、AEON 東久留米</td><td>郊區</td><td><span class="tag no">太遠</span></td><td>—</td></tr>
+        <tr><td>Toys"R"Us ×3（分店名被截掉）、Toy Shop Mammy、BE POP、西葛西 6-5-14、豐島區 171-0052 那家</td><td>不明</td><td><span class="tag no">待你補店名</span></td><td>截圖看不到分店名，告訴我是哪幾間我再排</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="sec">一之四、別人清單裡可以參考的（吃的）</h2>
+  <div class="matrix-wrap">
+    <table class="matrix">
+      <thead><tr><th>店</th><th>區域</th><th>吃什麼</th><th>哪裡接得上</th></tr></thead>
+      <tbody>
+        <tr><td>Aidaya あいだや</td><td>御徒町</td><td>海鮮丼、壽司</td><td><span class="tag d13">10/13</span>11:00 開門，跟上野採買同區，但 11:30 要走，吃不吃得到看排隊</td></tr>
+        <tr><td>名代宇奈とと</td><td>新宿、上野</td><td>平價鰻魚飯</td><td><span class="tag d13">10/13</span>上野店，採買完快速解決</td></tr>
+        <tr class="dropped"><td>Meat &amp; Cheese Forne、Salmon Noodle 3.0、すし銚子丸</td><td>新宿</td><td>義大利麵、拉麵、迴轉壽司</td><td>10/10 晚上 21:30 才離開下北澤，新宿這幾家接不上</td></tr>
+        <tr><td>MENYA NAKAGAWA</td><td>池袋</td><td>拉麵</td><td><span class="tag d12">10/12 晚</span>池袋那餐備選</td></tr>
+        <tr><td>銀座オリオンズ</td><td>銀座</td><td>焦糖布丁</td><td><span class="tag d9">10/9 晚</span>三よし 飯後可選，你說到時候看時間。塞進去的話鐵塔最晚 22:30 入場</td></tr>
+        <tr><td>麺屋ひょっとこ 有楽町</td><td>有樂町</td><td>柚子鹽拉麵</td><td><span class="tag d9">10/9 晚</span>三よし 的正式替代，排太長或沒開就改這家，離博品館走 8 分</td></tr>
+        <tr><td>Cafe Montana</td><td>吉祥寺</td><td>咖啡廳</td><td><span class="tag no">路線不經過</span></td></tr>
+        <tr class="dropped"><td>治一郎、一幻、うに虎、小林養雞、焼肉ごぉ、御殿場 Outlet、江戶東京建物園、山田屋、小網神社、目白庭園</td><td>各處</td><td>—</td><td>路線不經過或太遠</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="sec">二、每一天還能塞什麼</h2>
+  <p class="sec-sub">每一天分三格：已經定了的、還可以加的、放不進來的。</p>
+  <div class="days">
+
+    <section class="dayc">
+      <header><span class="d">10/09</span><span class="w">四<b>15:20 落地</b></span></header>
+      <div class="grp fix"><h4>已定</h4><ul>
+        <li><span class="t">15:20</span><span>成田落地，N'EX 直達新宿<small>18:05 到</small></span></li>
+        <li><span class="t">18:35</span><span>澀谷買衣服 25 分<small>有就買沒有就走</small></span></li>
+        <li><span class="t">19:20</span><span>博品館 TOY PARK<small>20:00 關，最緊的一段</small></span></li>
+        <li><span class="t">20:05</span><span>銀座 三よし</span></li>
+        <li><span class="t">21:15</span><span>東京鐵塔 夜景＋投影秀<small>最後入場 22:30</small></span></li>
+      </ul></div>
+      <div class="grp add"><h4>還可以加</h4><ul>
+        <li><span class="t">21:30</span><span>麻布十番宵夜<small>赤羽橋走 10 分</small></span></li>
+      </ul></div>
+      <div class="grp nope"><h4>放不進來</h4><ul>
+        <li><span class="t">20:00</span><span>Bic Camera 有樂町<small>跟鐵塔撞，改 10/12 晚在澀谷或池袋 Bic</small></span></li>
+        <li><span class="t">—</span><span>任何白天景點<small>落地就傍晚</small></span></li>
+      </ul></div>
+    </section>
+
+    <section class="dayc">
+      <header><span class="d">10/10</span><span class="w">六 · 發售日<b>三連休 D1</b></span></header>
+      <div class="grp fix"><h4>已定</h4><ul>
+        <li><span class="t">08:45</span><span>ますのや 排隊<small>9:30 開店，買完就走</small></span></li>
+        <li><span class="t">12:45</span><span>Bar 12:45、14:30 兩場<small>到 16:15</small></span></li>
+        <li><span class="t">16:15</span><span>下北澤晚餐、休息<small>16:30 那場沒訂</small></span></li>
+        <li><span class="t">18:15</span><span>Bar 18:15、20:00 兩場<small>約 21:30 離開</small></span></li>
+      </ul></div>
+      <div class="grp add"><h4>還可以加</h4><ul>
+        <li><span class="t">21:30</span><span>下北澤宵夜<small>想吃再吃</small></span></li>
+      </ul></div>
+      <div class="grp nope"><h4>放不進來</h4><ul>
+        <li><span class="t">10:00</span><span>ヤマダ 竹ノ塚、向島百花園<small>你決定買完直衝下北澤</small></span></li>
+        <li><span class="t">晚上</span><span>Beyblade 採買<small>發售日晚上多半掃空，人也累</small></span></li>
+        <li><span class="t">21:30</span><span>新宿 うどん屋 新堀<small>L.O. 21:30，趕不上</small></span></li>
+        <li><span class="t">下午</span><span>夜來祭<small>人在下北澤</small></span></li>
+      </ul></div>
+    </section>
+
+    <section class="dayc">
+      <header><span class="d">10/11</span><span class="w">日<b>三連休 D2</b></span></header>
+      <div class="grp fix"><h4>已定</h4><ul>
+        <li><span class="t">11:00</span><span>Bar 11:00、12:45 兩場<small>，到 14:15</small></span></li>
+        <li><span class="t">16:30</span><span>Bar 16:30 場<small>，到 18:00</small></span></li>
+        <li><span class="t">18:30</span><span>池袋：夜來祭壓軸 → いろは 晚餐 → Bic 池袋<small>到 21:30</small></span></li>
+      </ul></div>
+      <div class="grp add"><h4>14:15 到 16:30 的空檔</h4><ul>
+        <li><span class="t">14:15</span><span>下北澤午餐、休息<small>最輕鬆</small></span></li>
+        <li><span class="t">14:30</span><span>原宿 Kiddy Land 看陀螺<small>千代田線 10 分，15:50 前回程</small></span></li>
+      </ul></div>
+      <div class="grp nope"><h4>放不進來</h4><ul>
+        <li><span class="t">09:30</span><span>昭和紀念公園、澀谷 LABI 早排<small>接不上 11:00</small></span></li>
+        <li><span class="t">中午</span><span>池袋來回<small>空檔只有 2 小時 15 分，改到晚上</small></span></li>
+        <li><span class="t">18:30</span><span>乃木坂 にくだらけ<small>讓給夜來祭，移到 10/12</small></span></li>
+      </ul></div>
+    </section>
+
+    <section class="dayc">
+      <header><span class="d">10/12</span><span class="w">一<b>體育之日 假日</b></span></header>
+      <div class="grp fix"><h4>已定</h4><ul>
+        <li><span class="t">08:00</span><span>鎌倉一日<small>你選的，16:00 離開</small></span></li>
+        <li><span class="t">17:05</span><span>AIR TWOKYO 澀谷 MAGNET 5F<small>到 17:50</small></span></li>
+      </ul></div>
+      <div class="grp add"><h4>18:00 之後二選一</h4><ul>
+        <li><span class="t">18:30</span><span>A：西麻布 にくだらけ 燒肉<small>20:30 回飯店</small></span></li>
+        <li><span class="t">18:30</span><span>B：秋葉原 Mandarake、TamTam、駿河屋<small>這趟唯一能逛二手店的時段，21:00 回飯店</small></span></li>
+      </ul></div>
+      <div class="grp nope"><h4>放不進來</h4><ul>
+        <li><span class="t">16:40</span><span>稻村崎日落、江之島<small>你要早點回去</small></span></li>
+        <li><span class="t">—</span><span>河口湖、昭和紀念公園、立川反斗城<small>選了鎌倉</small></span></li>
+      </ul></div>
+    </section>
+
+    <section class="dayc">
+      <header><span class="d">10/13</span><span class="w">二<b>15:40 起飛</b></span></header>
+      <div class="grp fix"><h4>已定</h4><ul>
+        <li><span class="t">08:15</span><span>行李寄上野置物櫃</span></li>
+        <li><span class="t">09:30</span><span>上野 Yodobashi 開店</span></li>
+        <li><span class="t">10:00</span><span>上野 Yamashiroya 開店</span></li>
+        <li><span class="t">11:40</span><span>京成上野 Skyliner 直達成田<small>最晚 12:30</small></span></li>
+      </ul></div>
+      <div class="grp add"><h4>還可以加</h4><ul>
+        <li><span class="t">09:00</span><span>秋葉原 ドンキ<small>24 小時，先去再搭 1 站到上野</small></span></li>
+        <li><span class="t">10:45</span><span>Aidaya 或 hitoma<small>看時間</small></span></li>
+        <li><span class="t">11:00</span><span>水道橋 Ancredoré 刨冰<small>10/12 沒吃到的備案，11:45 回上野，Skyliner 12:20</small></span></li>
+      </ul></div>
+      <div class="grp nope"><h4>放不進來</h4><ul>
+        <li><span class="t">—</span><span>銀座 三よし 第一輪、澀谷 AIR TWOKYO 備案<small>上野採買佔掉了</small></span></li>
+        <li><span class="t">—</span><span>TamTam、Mandarake<small>11:00、12:00 才開</small></span></li>
+      </ul></div>
+    </section>
+
+  </div>
+
+  <h2 class="sec">三、目前的安排</h2>
+  <p class="sec-sub">依你最新給的資訊更新。黃色框是還沒解決的問題，綠色框是我推論的、請你確認。</p>
+  <div class="plan">
+    <div class="pday">
+      <div class="d">10/09<small>THU</small></div>
+      <div><h3>抵達 → 澀谷快閃買衣服 → 銀座 → 東京鐵塔</h3>
+        <ul>
+          <li><b>15:20</b> 成田落地，入境領行李約 1 小時</li>
+          <li><b>16:45</b> N'EX 成田特快直達新宿，約 80 分。先在機場買 N'EX 車票或 Suica</li>
+          <li><b>18:05</b> 到新宿，飯店 Check-in 放行李，15 分鐘內出門</li>
+          <li><b>18:35</b> 山手線新宿 → 澀谷 5 分，買衣服到 19:00，有就買沒有就走 <span class="pill go">你的提議</span></li>
+          <li><b>19:00</b> 銀座線澀谷 → 新橋，約 18 分，出站走 3 分</li>
+          <li><b>19:20</b> 博品館 TOY PARK，看陀螺貨況到 19:55，20:00 關</li>
+          <li><b>20:05</b> 走 7 分到銀座 三よし 和牛レア天丼，約 45 分，L.O. 21:30 <span class="pill go">你指定的店</span></li>
+          <li><b>可選</b> 銀座オリオンズ 焦糖布丁，同在銀座，到時候看時間和體力。塞得下的話鐵塔改 21:45 上去，最後入場 22:30 仍然來得及</li>
+          <li><b>替代</b> 三よし 排太長或沒開的話，改吃 麺屋ひょっとこ 有楽町店，柚子鹽拉麵，有樂町站旁，離博品館走 8 分，上餐快</li>
+          <li><b>20:55</b> 走 8 分到大江戶線汐留站，搭 2 站到赤羽橋，出站走 5 分</li>
+          <li><b>21:15</b> 東京鐵塔主甲板，夜景加萬聖節投影秀。秀演到 22:50，最後入場 22:30</li>
+          <li><b>22:15</b> 下塔，赤羽橋大江戶線直達新宿，約 20 分，明天要早起</li>
+        </ul>
+        <div class="open good"><b>成田進、住新宿，四件事還是塞得下，但緩衝只剩 5 到 10 分鐘。</b>博品館 19:20 到、19:55 關門前走，是最緊的一段。順序不能換：博品館 20:00 關一定要先去，鐵塔最後入場 22:30 最有彈性。</div>
+        <div class="open"><b>N'EX 若誤點或入境排太久：</b>直接砍博品館。改成 18:35 澀谷 → 19:00 銀座線到銀座 → 19:20 三よし → 20:30 鐵塔，整條線多出 45 分鐘。博品館的功能只是看貨況，10/11 的 Bic 池袋可以補。</div>
+        <div class="open"><b>連帶好處：</b>10/12 鎌倉不用提早走，可以看稻村崎日落，19:00 到澀谷只逛 AIR TWOKYO，21:00 燒肉不趕。10/9 若下雨或雲厚，鐵塔改到 10/12 22:00 前上去，或放棄。</div>
+      </div>
+    </div>
+    <div class="pday">
+      <div class="d">10/10<small>SAT</small><span class="tag">發售日</span></div>
+      <div><h3>ますのや → 下北澤 Bar 全天</h3>
+        <ul>
+          <li><b>07:45</b> 新宿出門。山手線到日暮里，常磐線 1 站到北千住，東武線到西新井，約 50 分；站前轉公車或步行 18 分</li>
+          <li><b>08:50</b> ますのや 門口排隊，9:30 開店。新品 BX-52、BX-53、BX-56 買完就走</li>
+          <li><b>10:00</b> 買完直接走。西新井 → 北千住 → 千代田線直通小田急 → 下北澤，約 65 分</li>
+          <li><b>11:10</b> 到下北澤，慢慢吃午餐，順便看一下 Bar 位置</li>
+          <li><b>12:45</b> 第一場 ，<b>14:30</b> 第二場 。新品每桌 1 顆，下午會補一次貨</li>
+          <li><b>16:15</b> 到 18:15 沒訂場，在下北澤吃晚餐、休息 2 小時</li>
+          <li><b>18:15</b> 第三場 ，<b>20:00</b> 第四場 ，約 <b>21:30</b> 離開</li>
+          <li><b>21:30</b> 想吃再吃宵夜，否則直接回飯店</li>
+        </ul>
+        <div class="open good"><b>定案：</b>買完直衝下北澤，中間不塞別的。ヤマダ 竹ノ塚 和向島百花園都不去。</div>
+      </div>
+    </div>
+    <div class="pday">
+      <div class="d">10/11<small>SUN</small><span class="tag">連休 D2</span></div>
+      <div><h3>Bar 三場，晚上池袋夜來祭壓軸＋いろは</h3>
+        <ul>
+          <li><b>10:30</b> 到下北澤，附近喝咖啡</li>
+          <li><b>11:00</b> 第一場 ，<b>12:45</b> 第二場 ，約 14:15 結束</li>
+          <li><b>14:15</b> 到 16:30 空 2 小時 15 分：在下北澤吃午餐休息；或千代田線 10 分去原宿 Kiddy Land 看陀螺，15:50 前回程</li>
+          <li><b>16:30</b> 第三場 ，約 18:00 結束</li>
+          <li><b>18:05</b> 小田急到新宿、山手線到池袋，18:30 到</li>
+          <li><b>18:30</b> 西口公園看夜來祭，週日傍晚是正式賽尾聲和總踊，活動到 20:00 <span class="pill fixed">你選的</span></li>
+          <li><b>19:45</b> 回東口 牛かつ いろは 晚餐，約 22:00 關 <span class="pill go">你指定的店</span></li>
+          <li><b>20:45</b> Bic Camera 池袋看陀螺、辦 Bic App，22:00 關</li>
+          <li><b>21:30</b> 回飯店</li>
+        </ul>
+        <div class="open good"><b>為什麼池袋改到晚上：</b>中間只空 2 小時 15 分，去回就吃掉 50 分鐘，夜來祭只能看 25 分鐘。改到晚上可以看壓軸，いろは 當晚餐，Bic 也開到 22:00。</div>
+        <div class="open"><b>替代版：</b>堅持中午去池袋也行，14:45 いろは、15:20 看 25 分鐘夜來祭、15:45 回程；晚上 18:30 乃木坂 にくだらけ。但夜來祭會很趕。</div>
+      </div>
+    </div>
+    <div class="pday">
+      <div class="d">10/12<small>MON</small><span class="tag">體育之日</span></div>
+      <div><h3>鎌倉一日 → 澀谷 → 早點回飯店</h3>
+        <ul>
+          <li><b>08:00</b> 新宿 → 北鎌倉，湘南新宿線直達約 1 小時，Suica 直接刷</li>
+          <li><b>09:00</b> 圓覺寺 → 建長寺 → <b>10:30</b> 鶴岡八幡宮</li>
+          <li><b>11:15</b> 小町通提早午餐，假日 12 點後會塞</li>
+          <li><b>12:30</b> 報國寺竹林抹茶，公車 10 分，來回連喝茶約 1 小時 20 分（累了就跳過，直接去長谷）</li>
+          <li><b>14:00</b> 江之電到長谷：大佛（16:45 關）、長谷寺見晴台看海、御靈神社鳥居電車</li>
+          <li><b>15:15</b> 江之電到鎌倉高校前拍平交道，假日要排，拍完就走（趕時間就跳過）</li>
+          <li><b>15:40</b> 江之電回鎌倉站，16:00 湘南新宿線直達澀谷</li>
+          <li><b>17:05</b> 到澀谷。MAGNET 5F 的 AIR TWOKYO，到 17:50 <span class="pill fixed">你指定</span>。10/9 衣服沒買到的話這裡再補</li>
+          <li><b>18:00</b> 之後二選一，見下方</li>
+        </ul>
+        <div class="open good"><b>依你的要求 17:05 回到東京，</b>稻村崎日落不等了。</div>
+        <div class="open"><b>18:00 之後版本 A，燒肉：</b>表參道轉千代田線到乃木坂，走 10 分到西麻布，18:30 焼肉にくだらけ（訂位並確認假日有開），20:00 吃完，大江戶線六本木直達新宿，20:30 回飯店。</div>
+        <div class="open"><b>18:00 之後版本 B，秋葉原：</b>山手線 30 分到秋葉原，18:30 到 20:30 逛 Mandarake、TamTam（20:00 關）、駿河屋、ドンキ、Yodobashi，晚餐在秋葉原吃，21:00 回新宿。燒肉這趟就沒了。想逛秋葉原的二手店和模型店，這是唯一的時段。</div>
+        <div class="open"><b>版本 B 加鰻魚飯：</b>17:50 澀谷 → 山手線 15 分到池袋 → 18:15 いづも 鰻玉丼 → 19:05 山手線 25 分到秋葉原 → 19:30 到 21:00 逛（Mandarake 只剩 30 分鐘，駿河屋約 21:00 關、Yodobashi 22:00）→ 21:30 回新宿。</div>
+        <div class="open"><b>版本 B 加水蜜桃冰：</b>17:50 澀谷 → 半藏門線九段下轉三田線 1 站到水道橋，約 25 分 → 18:15 Ancredoré 刨冰 30 分 → 總武線 2 站 5 分 → 18:55 秋葉原，Mandarake 和 TamTam 到 20:00，其他到 21:00 以後 → 21:00 回新宿。只少 30 分鐘。鰻魚飯和刨冰二選一，兩個都要的話秋葉原只剩 1 小時。</div>
+      </div>
+    </div>
+    <div class="pday">
+      <div class="d">10/13<small>TUE</small></div>
+      <div><h3>行李帶著走，上野採買，Skyliner 直達成田</h3>
+        <ul>
+          <li><b>07:45</b> 新宿退房，行李帶著。山手線到上野約 25 分</li>
+          <li><b>08:15</b> 行李放進上野站置物櫃（JR 上野或京成上野都有大型櫃）</li>
+          <li><b>08:30</b> 山手線 1 站到秋葉原，ドンキ 掃一圈 20 分鐘</li>
+          <li><b>09:25</b> 回上野，9:30 Yodobashi 上野 開店</li>
+          <li><b>10:00</b> Yamashiroya 開店，一樓看陀螺 <span class="pill fixed">主採買放這裡</span></li>
+          <li><b>10:45</b> 時間夠就 Aidaya 或宇奈とと 上野店早午餐，不夠就站內吃</li>
+          <li><b>11:40</b> 取行李，京成上野 Skyliner 直達成田，約 41 分，記得先買好票或現場買</li>
+          <li><b>12:30</b> 到成田，報到退稅，<b>15:40</b> 起飛</li>
+        </ul>
+        <div class="open good"><b>不用回新宿拿行李，</b>省 40 分鐘。Skyliner 最晚 12:30 從上野出發都來得及，所以採買最多能逛到 12:15。</div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">四、還沒拍板的事</h2>
+  <p class="sec-sub">綠色是我建議的選項。</p>
+
+  <div class="q"><h3><span class="num">Q1</span>10/11 Bar 場次，已解</h3>
+    <ul class="opts">
+      <li class="rec"><span class="k">✓</span><span>11:00 場和 16:30 場，各約 1.5 小時。10/11 的安排成立。</span></li>
+    </ul></div>
+
+  <div class="q"><h3><span class="num">Q2</span>10/11 池袋改到晚上，可以嗎？</h3>
+    <ul class="opts">
+      <li class="rec"><span class="k">A</span><span>可以。18:00 第三場結束直接去池袋，看夜來祭壓軸、吃 いろは、逛 Bic。中午空檔在下北澤休息或去原宿 Kiddy Land。にくだらけ 移到 10/12 晚上。<span class="cost">代價：10/12 買衣服少 30 分鐘，燒肉假日要確認有開</span></span></li>
+      <li><span class="k">B</span><span>維持中午去池袋。14:45 いろは、15:20 看 25 分鐘夜來祭、15:45 回程；晚上 18:30 にくだらけ。<span class="cost">代價：夜來祭只看 25 分鐘，很趕</span></span></li>
+    </ul></div>
+
+  <div class="q"><h3><span class="num">Q2b</span> 是你們的訂位，已解</h3>
+    <ul class="opts">
+      <li class="rec"><span class="k">✓</span><span>10/11 三場：11:00、12:45、16:30。中午空檔 14:15 到 16:30，池袋放晚上。</span></li>
+    </ul></div>
+
+  <div class="q"><h3><span class="num">Q3</span>10/12 鎌倉，已解</h3>
+    <ul class="opts">
+      <li class="rec"><span class="k">✓</span><span>鎌倉一日，16:40 離開，17:45 澀谷 AIR TWOKYO，19:15 燒肉，21:15 回新宿。河口湖、昭和紀念公園不去。</span></li>
+    </ul></div>
+
+  <div class="q"><h3><span class="num">Q4</span>10/9「澀谷 35 分 → 博品館 → 三よし → 鐵塔」，已依你的提議排進去</h3>
+    <ul class="opts">
+      <li class="rec"><span class="k">✓</span><span>羽田進就成立。成田進整條往後 15 分鐘，行李寄澀谷置物櫃。<span class="cost">代價：第一晚 22:00 才下塔</span></span></li>
+    </ul></div>
+
+  <div class="q"><h3><span class="num">Q5</span>10/12 晚餐</h3>
+    <ul class="opts">
+      <li class="rec"><span class="k">A</span><span>西麻布 にくだらけ 21:00，從澀谷 25 分。訂位時確認 10/12 假日有開。</span></li>
+      <li><span class="k">B</span><span>池袋 いづも 鰻玉丼 21:20，L.O. 22:00。燒肉沒開時用。</span></li>
+      <li><span class="k">C</span><span>中目黑 串若丸，離澀谷最近但常排隊。</span></li>
+    </ul></div>
+
+  <div class="q"><h3><span class="num">Q6</span>成田進出、住新宿，已解</h3>
+    <ul class="opts">
+      <li class="rec"><span class="k">✓</span><span>10/9 N'EX 直達新宿；10/10 到下北澤 10 分；10/12 湘南新宿線直達北鎌倉；10/13 行李帶到上野寄櫃，Skyliner 直達成田。</span></li>
+    </ul></div>
+
+  <div class="q"><h3><span class="num">Q8</span>秋葉原要放哪天？</h3>
+    <ul class="opts">
+      <li class="rec"><span class="k">B</span><span>10/12 晚上，澀谷 AIR TWOKYO 之後 18:30 到 20:30。秋葉原的店多半中午才開、晚上才熱鬧，這是整趟最好的時段，二手店和模型店都還開，晚餐在秋葉原吃。<span class="cost">代價：にくだらけ 燒肉這趟沒了</span></span></li>
+      <li><span class="k">A</span><span>10/13 早上，跟上野併在一起：8:30 ドンキ、9:30 Yodobashi Akiba 全館、10:30 上野 Yamashiroya、11:15 上野 Yodobashi、12:00 Skyliner。<span class="cost">代價：Mandarake 12:00、TamTam 和駿河屋 11:00 才開，二手店和模型店逛不到</span></span></li>
+      <li><span class="k">C</span><span>10/11 中午 14:15 到 16:30 的空檔，從下北澤過去 40 分鐘。<span class="cost">代價：只有 50 分鐘能逛，不划算</span></span></li>
+    </ul></div>
+
+  <div class="q"><h3><span class="num">Q7</span>Google Maps 清單裡被截掉名字的店</h3>
+    <ul class="opts">
+      <li><span class="k">—</span><span>三家 Toys"R"Us 是哪幾間分店？Toy Shop Mammy、BE POP、西葛西 6-5-14、豐島區 171-0052 那家各是什麼店？告訴我名字我再看順不順。</span></li>
+    </ul></div>
+
+  <div class="reply">
+    剩下的只有 Q2（池袋改晚上可以嗎）、Q8（10/12 晚上：燒肉、秋葉原、或秋葉原加鰻魚飯）和 Q7（截掉名字的店，可略）。回完我把行程頁更新成定稿版，同一個網址。
+  </div>
+
+  <p class="srcs">
+    參考：<a href="https://www.tokyotower.co.jp/event/halloween2026/">東京鐵塔 Halloween party 2026</a> ·
+    <a href="https://bakeneko.oops.jp/">神樂坂化貓節 2026</a> ·
+    <a href="https://airtwokyo.com/ja-us/blogs/news/2">AIR TWOKYO 官網公告</a> ·
+    <a href="https://magnetbyshibuya109.jp/en/shop/air-twokyo-pop-up-store-in-magnet-by-shibuya109/">MAGNET 店舖頁</a> ·
+    <a href="https://www.tablecheck.com/ja/shops/beyblade-bar/reserve/login_required">Beyblade Bar 訂位</a> ·
+    <a href="https://tabiris.com/archives/shinjuku-kawaguchiko/">新宿～河口湖巴士改點</a> ·
+    <a href="https://kaibutsu-blog.com/?p=2714">昭和紀念公園波斯菊花期</a> ·
+    <a href="https://www.atpress.ne.jp/news/4363108/print">向島百花園 萩まつり</a> ·
+    <a href="https://afterthirtytravel.tw/kamakura-attractions/">鎌倉景點文章</a> ·
+    <a href="https://aumo.jp/articles/18978">銀座 三よし</a> ·
+    <a href="https://r.gnavi.co.jp/gj3z500/">焼肉 にくだらけ</a> ·
+    <a href="https://r.gnavi.co.jp/hkck36me0000/">いづも 池袋</a> ·
+    <a href="https://san-tatsu.jp/spots/209062/">牛かつ いろは</a> ·
+    <a href="https://www.hotpepper.jp/strJ004591133/">富かわ</a> ·
+    <a href="https://retty.me/restaurant/100001552237/">うどん屋 新堀</a> ·
+    <a href="https://www.bcnretail.com/topics_detail9/20250610_525510.html">ヤマダ 足立竹の塚</a> ·
+    <a href="https://www.inside-games.jp/release/prtimes/20260910/306107.html">TOPPA!!! BASE AKIBA 營業時間</a> ·
+    你的筆記《戰鬥陀螺_日本購買整理.md》第 0 章
+  </p>
+</div>
+
+<script>
+(function(){
+  var KEY='tokyo-decide-v3',state={};
+  try{state=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){state={}}
+  var cards=[].slice.call(document.querySelectorAll('.cand'));
+  function paint(card){
+    var id=card.getAttribute('data-id'),v=state[id]||'';
+    if(v)card.classList.toggle('is-no',v==='no');
+    [].slice.call(card.querySelectorAll('.state button')).forEach(function(b){
+      b.setAttribute('aria-pressed',b.getAttribute('data-v')===v?'true':'false');
+    });
+  }
+  cards.forEach(function(card){
+    paint(card);
+    card.addEventListener('click',function(e){
+      var b=e.target.closest('.state button');if(!b)return;
+      var id=card.getAttribute('data-id'),v=b.getAttribute('data-v');
+      state[id]=(state[id]===v)?'':v;
+      try{localStorage.setItem(KEY,JSON.stringify(state))}catch(err){}
+      card.classList.toggle('is-no',state[id]==='no');
+      paint(card);
+    });
+  });
+})();
+</script>
+</body>
+</html>
